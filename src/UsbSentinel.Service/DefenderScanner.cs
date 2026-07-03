@@ -30,8 +30,16 @@ public sealed class DefenderScanner
         }
         log("Checking Microsoft Defender signatures...");
         var result = await RunAsync("-SignatureUpdate", null, cancellationToken);
+        if (result.ExitCode == 0)
+        {
+            log("Defender signatures are current.");
+            return true;
+        }
+
+        log("Configured update source failed; trying Microsoft's direct security-intelligence service.");
+        result = await RunAsync("-SignatureUpdate -MMPC", null, cancellationToken);
         log(result.ExitCode == 0
-            ? "Defender signatures are current."
+            ? "Defender signatures were updated directly from Microsoft."
             : "Signature update unavailable; continuing with installed definitions.");
         return result.ExitCode == 0;
     }

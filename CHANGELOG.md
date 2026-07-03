@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.0 - 2026-07-03
+
+- Added automatic Defender security-intelligence updates in the Windows Service.
+- Checks 30 seconds after service startup and every six hours thereafter.
+- Falls back to Microsoft's official MMPC update source when configured sources fail.
+- Records update versions, success, offline, and failure results in the local audit log.
+
 ## 1.6.2 - 2026-07-03
 
 - Added desktop and tray notifications after formatting or Defender remediation.

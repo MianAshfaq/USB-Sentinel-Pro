@@ -15,6 +15,7 @@ with Microsoft Defender, and blocks storage again after disconnection.
 - Password required for every USB-enable request.
 - Salted PBKDF2-SHA256 password verifier with failed-attempt lockout.
 - Microsoft Defender signature updates, custom scans, and remediation results.
+- Background Defender signature checks at startup and every six hours, with official Microsoft MMPC fallback.
 - WMI USB insert/remove monitoring with event deduplication and automatic fail-closed blocking.
 - USB bus-aware discovery for flash drives and mounted portable HDD volumes.
 - Password-protected Defender remediation and guarded exFAT/NTFS formatting tools.

@@ -13,5 +13,6 @@ builder.Services.AddSingleton<DefenderScanner>();
 builder.Services.AddSingleton<SentinelCoordinator>();
 builder.Services.AddSingleton<PipeServer>();
 builder.Services.AddHostedService<SentinelWorker>();
+builder.Services.AddHostedService<DefenderSignatureWorker>();
 
 await builder.Build().RunAsync();

@@ -209,6 +209,36 @@ public sealed class SentinelCoordinator(
     public void RecordSecurityEvent(string eventType, string message) =>
         PublishLog(LogLevel.Security, eventType, message);
 
+    public async Task UpdateDefenderSignaturesInBackgroundAsync(CancellationToken token)
+    {
+        if (!await _operationLock.WaitAsync(0, token))
+            return;
+        try
+        {
+            var previousVersion = defender.SignatureVersion;
+            var succeeded = await defender.UpdateSignaturesAsync(
+                message => PublishLog(LogLevel.Information, "SignatureUpdate", message), token);
+            var currentVersion = defender.SignatureVersion;
+            PublishLog(succeeded ? LogLevel.Security : LogLevel.Warning, "SignatureUpdateCompleted",
+                succeeded
+                    ? $"Microsoft Defender security intelligence is current ({currentVersion})."
+                    : $"Automatic signature update failed; installed version {previousVersion} remains active.",
+                result: succeeded ? "Updated" : "Offline/Unavailable");
+            Publish(new PipeEvent(SentinelProtocol.Version, EventType.Snapshot, Snapshot: Snapshot));
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            PublishLog(LogLevel.Warning, "SignatureUpdateFailed", ex.Message);
+        }
+        finally
+        {
+            _operationLock.Release();
+        }
+    }
+
     public async Task RemediateThreatsAsync(CancellationToken token)
     {
         if (!await _operationLock.WaitAsync(0, token))
