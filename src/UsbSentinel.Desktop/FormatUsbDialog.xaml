@@ -1,7 +1,7 @@
 <Window x:Class="UsbSentinel.Desktop.FormatUsbDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Format USB storage" Width="500" Height="520" ResizeMode="NoResize"
+        Title="Format USB storage" Width="500" Height="590" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
     <Border Padding="30" Background="{StaticResource BackgroundBrush}">
         <StackPanel>
@@ -11,7 +11,12 @@
                        Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"/>
             <TextBlock Text="USB VOLUME" FontSize="10" Foreground="{StaticResource BlueBrush}" Margin="0,22,0,7"/>
             <ComboBox x:Name="DriveBox" ItemsSource="{Binding Drives}" SelectionChanged="DriveChanged" Height="38"/>
-            <CheckBox x:Name="QuickBox" Content="Quick format (exFAT)" IsChecked="True" Margin="0,18,0,0"/>
+            <TextBlock Text="FILE SYSTEM" FontSize="10" Foreground="{StaticResource BlueBrush}" Margin="0,16,0,7"/>
+            <ComboBox x:Name="FileSystemBox" Height="38" SelectedIndex="0">
+                <ComboBoxItem Content="exFAT" ToolTip="Best compatibility for large files across modern devices"/>
+                <ComboBoxItem Content="NTFS" ToolTip="Windows permissions, journaling, and large-volume support"/>
+            </ComboBox>
+            <CheckBox x:Name="QuickBox" Content="Quick format" IsChecked="True" Margin="0,16,0,0"/>
             <TextBlock x:Name="PhraseHelp" Foreground="{StaticResource MutedBrush}" Margin="0,16,0,6"/>
             <TextBox x:Name="ConfirmationBox" Height="38"/>
             <TextBlock Text="ADMINISTRATOR PASSWORD" FontSize="10" Foreground="{StaticResource BlueBrush}" Margin="0,16,0,7"/>

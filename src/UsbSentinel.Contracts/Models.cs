@@ -84,7 +84,8 @@ public sealed record PipeCommand(
     string? NewPassword = null,
     string? Drive = null,
     string? Confirmation = null,
-    bool QuickFormat = true);
+    bool QuickFormat = true,
+    string FileSystem = "exFAT");
 
 public sealed record PipeEvent(
     int ProtocolVersion,

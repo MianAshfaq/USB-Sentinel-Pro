@@ -17,7 +17,7 @@ with Microsoft Defender, and blocks storage again after disconnection.
 - Microsoft Defender signature updates, custom scans, and remediation results.
 - WMI USB insert/remove monitoring with event deduplication and automatic fail-closed blocking.
 - USB bus-aware discovery for flash drives and mounted portable HDD volumes.
-- Password-protected Defender remediation and guarded exFAT formatting tools.
+- Password-protected Defender remediation and guarded exFAT/NTFS formatting tools.
 - System-tray monitoring after the dashboard is closed.
 - Female Windows voice preference, voice test, and state announcements.
 - Defender health/signature status, audit export, and Security History access.

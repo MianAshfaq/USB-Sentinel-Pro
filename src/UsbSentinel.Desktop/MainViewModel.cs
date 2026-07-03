@@ -252,7 +252,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (request is null)
             return;
         await _client.SendAsync(CommandType.FormatUsb, password: request.Password, drive: request.Drive,
-            confirmation: request.Confirmation, quickFormat: request.QuickFormat);
+            confirmation: request.Confirmation, quickFormat: request.QuickFormat, fileSystem: request.FileSystem);
     }
 
     private static Task OpenUrlAsync(string url)

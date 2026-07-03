@@ -45,9 +45,11 @@ public partial class FormatUsbDialog : Window
                 MessageBoxButton.YesNo, MessageBoxImage.Stop, MessageBoxResult.No) != MessageBoxResult.Yes)
             return;
 
-        Request = new FormatUsbRequest(drive, PasswordBox.Password, expected, QuickBox.IsChecked == true);
+        var fileSystem = ((ComboBoxItem)FileSystemBox.SelectedItem).Content.ToString() ?? "exFAT";
+        Request = new FormatUsbRequest(drive, PasswordBox.Password, expected, QuickBox.IsChecked == true, fileSystem);
         DialogResult = true;
     }
 }
 
-public sealed record FormatUsbRequest(string Drive, string Password, string Confirmation, bool QuickFormat);
+public sealed record FormatUsbRequest(
+    string Drive, string Password, string Confirmation, bool QuickFormat, string FileSystem);

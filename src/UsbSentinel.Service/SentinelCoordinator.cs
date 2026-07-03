@@ -231,7 +231,7 @@ public sealed class SentinelCoordinator(
         finally { _operationLock.Release(); }
     }
 
-    public async Task FormatUsbAsync(string drive, bool quickFormat, CancellationToken token)
+    public async Task FormatUsbAsync(string drive, string fileSystem, bool quickFormat, CancellationToken token)
     {
         var root = UsbDriveInventory.NormalizeRoot(drive);
         if (!await _operationLock.WaitAsync(0, token))
@@ -254,11 +254,11 @@ public sealed class SentinelCoordinator(
             var letter = char.ToUpperInvariant(root[0]);
             var full = quickFormat ? string.Empty : " -Full";
             var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
-            var command = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"Format-Volume -DriveLetter {letter} -FileSystem exFAT -NewFileSystemLabel USB_SENTINEL -Confirm:$false -Force{full} -ErrorAction Stop\"";
+            var command = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"Format-Volume -DriveLetter {letter} -FileSystem {fileSystem} -NewFileSystemLabel USB_SENTINEL -Confirm:$false -Force{full} -ErrorAction Stop\"";
             var result = await DefenderScanner.RunProcessAsync(powershell, command, token);
             if (result.ExitCode != 0)
                 throw new InvalidOperationException(string.IsNullOrWhiteSpace(result.Output) ? "Windows could not format the drive." : result.Output.Trim());
-            PublishLog(LogLevel.Security, "FormatCompleted", $"{root} was formatted as exFAT.", root, "Completed");
+            PublishLog(LogLevel.Security, "FormatCompleted", $"{root} was formatted as {fileSystem}.", root, "Completed");
             completed = true;
         }
         catch (Exception ex)

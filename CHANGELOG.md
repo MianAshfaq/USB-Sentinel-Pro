@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.1 - 2026-07-03
+
+- Added explicit exFAT or NTFS selection for each chosen USB volume.
+- Clarified multi-drive scanning and Defender-only confirmed-threat removal.
+- Preserved separate, guarded workflows for threat remediation and full-volume formatting.
+
 ## 1.6.0 - 2026-07-03
 
 - Fixed repeated USB notifications caused by policy-generated WMI events.

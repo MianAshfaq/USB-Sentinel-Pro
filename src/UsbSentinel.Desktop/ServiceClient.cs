@@ -40,6 +40,7 @@ public sealed class ServiceClient : IDisposable
         string? drive = null,
         string? confirmation = null,
         bool quickFormat = true,
+        string fileSystem = "exFAT",
         CancellationToken token = default)
     {
         if (_writer is null)
@@ -49,7 +50,7 @@ public sealed class ServiceClient : IDisposable
         {
             var payload = new PipeCommand(
                 SentinelProtocol.Version, command, settings, password, newPassword,
-                drive, confirmation, quickFormat);
+                drive, confirmation, quickFormat, fileSystem);
             await _writer.WriteLineAsync(JsonSerializer.Serialize(payload, SentinelProtocol.JsonOptions));
         }
         finally

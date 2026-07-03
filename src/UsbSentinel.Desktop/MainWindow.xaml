@@ -304,8 +304,8 @@
                                 <Button Command="{Binding OpenSecurityCommand}" Margin="6,0,0,0" Padding="10,8" ToolTip="Open Windows Security history">
                                     <StackPanel Orientation="Horizontal"><fa:IconBlock Icon="Shield" Margin="0,0,7,0"/><TextBlock Text="HISTORY"/></StackPanel>
                                 </Button>
-                                <Button Command="{Binding RemediateThreatsCommand}" Margin="0,7,6,0" Padding="10,8" ToolTip="Ask Defender to remediate confirmed threats">
-                                    <StackPanel Orientation="Horizontal"><fa:IconBlock Icon="ShieldVirus" Margin="0,0,7,0"/><TextBlock Text="REMEDIATE"/></StackPanel>
+                                <Button Command="{Binding RemediateThreatsCommand}" Margin="0,7,6,0" Padding="10,8" ToolTip="Remove or quarantine only threats confirmed by Microsoft Defender">
+                                    <StackPanel Orientation="Horizontal"><fa:IconBlock Icon="ShieldVirus" Margin="0,0,7,0"/><TextBlock Text="REMOVE THREATS"/></StackPanel>
                                 </Button>
                                 <Button Command="{Binding FormatUsbCommand}" Margin="6,7,0,0" Padding="10,8" ToolTip="Erase and format a selected USB volume">
                                     <StackPanel Orientation="Horizontal"><fa:IconBlock Icon="HardDrive" Margin="0,0,7,0"/><TextBlock Text="FORMAT USB"/></StackPanel>
@@ -357,7 +357,7 @@
                             </StackPanel>
                             <Separator Background="{StaticResource BorderBrush}" Margin="0,24"/>
                             <TextBlock Text="EDITION" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
-                            <TextBlock Text="Community 1.6" Margin="0,7,0,0" FontWeight="SemiBold"/>
+                            <TextBlock Text="Community 1.6.1" Margin="0,7,0,0" FontWeight="SemiBold"/>
                             <TextBlock Text="Microsoft Defender integration" Margin="0,20,0,0" Foreground="{StaticResource MutedBrush}"/>
                             <TextBlock Text="Windows 11 x64" Margin="0,5,0,0" Foreground="{StaticResource MutedBrush}"/>
                         </StackPanel>

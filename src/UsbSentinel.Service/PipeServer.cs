@@ -188,7 +188,13 @@ public sealed class PipeServer(SentinelCoordinator coordinator, PasswordReposito
                         Message: "The erase confirmation phrase is invalid."), token);
                     break;
                 }
-                _ = coordinator.FormatUsbAsync(root, command.QuickFormat, token);
+                if (command.FileSystem is not ("exFAT" or "NTFS"))
+                {
+                    await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.Error,
+                        Message: "Only exFAT and NTFS formats are supported."), token);
+                    break;
+                }
+                _ = coordinator.FormatUsbAsync(root, command.FileSystem, command.QuickFormat, token);
                 break;
         }
     }

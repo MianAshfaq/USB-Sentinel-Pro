@@ -82,7 +82,8 @@ public sealed class ProtocolTests
             Password: "TestPassword9",
             Drive: @"E:\",
             Confirmation: "ERASE E:",
-            QuickFormat: false);
+            QuickFormat: false,
+            FileSystem: "NTFS");
 
         var json = JsonSerializer.Serialize(command, SentinelProtocol.JsonOptions);
         var deserialized = JsonSerializer.Deserialize<PipeCommand>(json, SentinelProtocol.JsonOptions);
@@ -92,5 +93,6 @@ public sealed class ProtocolTests
         Assert.Equal(@"E:\", deserialized.Drive);
         Assert.Equal("ERASE E:", deserialized.Confirmation);
         Assert.False(deserialized.QuickFormat);
+        Assert.Equal("NTFS", deserialized.FileSystem);
     }
 }
