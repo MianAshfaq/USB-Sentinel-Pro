@@ -8,8 +8,11 @@ namespace UsbSentinel.Service;
 public sealed class DefenderScanner
 {
     private readonly string? _mpCmdRun = ResolveMpCmdRun();
+    private DateTimeOffset? _lastSuccessfulSignatureUpdate;
 
     public bool IsAvailable => _mpCmdRun is not null;
+    public bool SignaturesRecentlyUpdated =>
+        _lastSuccessfulSignatureUpdate is { } updated && DateTimeOffset.UtcNow - updated < TimeSpan.FromHours(6);
 
     public string SignatureVersion
     {
@@ -19,6 +22,28 @@ public sealed class DefenderScanner
                 @"SOFTWARE\Microsoft\Windows Defender\Signature Updates");
             return key?.GetValue("AVSignatureVersion") as string ?? "Unknown";
         }
+    }
+
+    public async Task<TimeSpan?> GetSignatureAgeAsync(CancellationToken cancellationToken)
+    {
+        var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        var result = await RunProcessAsync(powershell,
+            "-NoProfile -NonInteractive -Command \"(Get-MpComputerStatus).AntivirusSignatureLastUpdated.ToUniversalTime().ToString('O')\"",
+            cancellationToken);
+        return result.ExitCode == 0 && DateTimeOffset.TryParse(result.Output.Trim(), out var updated)
+            ? DateTimeOffset.UtcNow - updated
+            : null;
+    }
+
+    public async Task<string> GetRecentThreatDetailsAsync(CancellationToken cancellationToken)
+    {
+        var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        var result = await RunProcessAsync(powershell,
+            "-NoProfile -NonInteractive -Command \"Get-MpThreatDetection | Sort-Object InitialDetectionTime -Descending | Select-Object -First 5 ThreatID,ThreatStatusID,InitialDetectionTime,Resources | ConvertTo-Json -Compress\"",
+            cancellationToken);
+        return result.ExitCode == 0 && !string.IsNullOrWhiteSpace(result.Output)
+            ? result.Output.Trim()
+            : "Defender threat details are available in Windows Security Protection History.";
     }
 
     public async Task<bool> UpdateSignaturesAsync(Action<string> log, CancellationToken cancellationToken)
@@ -32,14 +57,16 @@ public sealed class DefenderScanner
         var result = await RunAsync("-SignatureUpdate", null, cancellationToken);
         if (result.ExitCode == 0)
         {
+            _lastSuccessfulSignatureUpdate = DateTimeOffset.UtcNow;
             log("Defender signatures are current.");
             return true;
         }
 
         log("Configured update source failed; trying Microsoft's direct security-intelligence service.");
         result = await RunAsync("-SignatureUpdate -MMPC", null, cancellationToken);
-        log(result.ExitCode == 0
-            ? "Defender signatures were updated directly from Microsoft."
+        if (result.ExitCode == 0)
+            _lastSuccessfulSignatureUpdate = DateTimeOffset.UtcNow;
+        log(result.ExitCode == 0 ? "Defender signatures were updated directly from Microsoft."
             : "Signature update unavailable; continuing with installed definitions.");
         return result.ExitCode == 0;
     }

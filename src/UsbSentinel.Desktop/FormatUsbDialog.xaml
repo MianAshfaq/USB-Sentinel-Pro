@@ -10,7 +10,7 @@
             <TextBlock Text="This permanently removes all files from the selected USB drive or portable HDD volume. Confirm the drive letter carefully. Quick format is not secure erasure."
                        Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap"/>
             <TextBlock Text="USB VOLUME" FontSize="10" Foreground="{StaticResource BlueBrush}" Margin="0,22,0,7"/>
-            <ComboBox x:Name="DriveBox" ItemsSource="{Binding Drives}" SelectionChanged="DriveChanged" Height="38"/>
+            <ComboBox x:Name="DriveBox" ItemsSource="{Binding DriveChoices}" DisplayMemberPath="Summary" SelectionChanged="DriveChanged" Height="42"/>
             <TextBlock Text="FILE SYSTEM" FontSize="10" Foreground="{StaticResource BlueBrush}" Margin="0,16,0,7"/>
             <ComboBox x:Name="FileSystemBox" Height="38" SelectedIndex="0">
                 <ComboBoxItem Content="exFAT" ToolTip="Best compatibility for large files across modern devices"/>

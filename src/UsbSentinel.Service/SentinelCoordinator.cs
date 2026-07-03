@@ -75,7 +75,23 @@ public sealed class SentinelCoordinator(
             }
 
             SetState(UsbState.Scanning, "Updating Defender signatures.", 5, drives);
-            await defender.UpdateSignaturesAsync(message => PublishLog(LogLevel.Information, "Defender", message), token);
+            var signaturesUpdated = true;
+            if (defender.SignaturesRecentlyUpdated)
+                PublishLog(LogLevel.Information, "Defender", "Using recently updated Defender signatures for a faster scan start.");
+            else
+                signaturesUpdated = await defender.UpdateSignaturesAsync(message => PublishLog(LogLevel.Information, "Defender", message), token);
+            if (!signaturesUpdated)
+            {
+                var signatureAge = await defender.GetSignatureAgeAsync(token);
+                if (signatureAge is null || signatureAge > TimeSpan.FromDays(7))
+                {
+                    BlockStorage();
+                    var ageText = signatureAge is null ? "unknown" : $"{signatureAge.Value.TotalDays:0.0} days";
+                    SetState(UsbState.Failed, "Defender signatures are too old or could not be verified. USB storage is blocked.", 0, drives);
+                    PublishLog(LogLevel.Error, "StaleSignatures", $"Defender signature age is {ageText}; access was denied.");
+                    return;
+                }
+            }
 
             for (var index = 0; index < drives.Count; index++)
             {
@@ -103,6 +119,11 @@ public sealed class SentinelCoordinator(
                         result.Summary,
                         drive,
                         result.RemediationSucceeded ? "Removed/Quarantined" : "Blocked");
+                    if (result.ThreatFound)
+                    {
+                        var details = await defender.GetRecentThreatDetailsAsync(token);
+                        PublishLog(LogLevel.Security, "ThreatDetails", details, drive, "Defender confirmed");
+                    }
                     return;
                 }
 
@@ -237,6 +258,19 @@ public sealed class SentinelCoordinator(
         {
             _operationLock.Release();
         }
+    }
+
+    public void AuditProtectionState()
+    {
+        var state = Snapshot.State;
+        if (state is UsbState.Enabled or UsbState.Enabling or UsbState.Scanning or UsbState.WaitingForDevice)
+            return;
+        if (policy.IsStorageBlocked())
+            return;
+        TryBlockStorage();
+        PublishLog(LogLevel.Security, "TamperDetected",
+            "USB storage policy changed unexpectedly and was restored to blocked.");
+        SetState(UsbState.Disabled, "Protection policy was restored after an unexpected change.", 0, GetUsbDrives());
     }
 
     public async Task RemediateThreatsAsync(CancellationToken token)

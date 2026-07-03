@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.8.0 - 2026-07-03
+
+- Added faster scan startup by reusing signatures updated within six hours.
+- Added independent status rows for every connected USB volume.
+- Added volume label, capacity, and filesystem details before formatting.
+- Blocks access when Defender signatures are over seven days old or unverifiable after an update failure.
+- Added Defender threat-detail audit entries and automatic USB-policy tamper restoration.
+- Added optional Authenticode signing for executables and MSI when repository certificate secrets are configured.
+
 ## 1.7.0 - 2026-07-03
 
 - Added automatic Defender security-intelligence updates in the Windows Service.

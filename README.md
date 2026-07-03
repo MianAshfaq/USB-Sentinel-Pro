@@ -20,6 +20,8 @@ with Microsoft Defender, and blocks storage again after disconnection.
 - USB bus-aware discovery for flash drives and mounted portable HDD volumes.
 - Password-protected Defender remediation and guarded exFAT/NTFS formatting tools.
 - Post-remediation and post-format prompts to rescan and enable only when clean.
+- Per-drive scan results and safer format identification with label, size, and filesystem.
+- Seven-day signature freshness gate and automatic USB-policy tamper restoration.
 - System-tray monitoring after the dashboard is closed.
 - Female Windows voice preference, voice test, and state announcements.
 - Defender health/signature status, audit export, and Security History access.
@@ -67,6 +69,10 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 The build restores packages, runs tests, publishes self-contained Windows x64
 binaries, and creates `artifacts\installer\USB-Sentinel-Pro-Setup.msi`.
+
+Official releases can be Authenticode-signed by configuring the GitHub Actions
+secrets `CODE_SIGNING_CERTIFICATE_BASE64` and `CODE_SIGNING_CERTIFICATE_PASSWORD`.
+Unsigned community builds continue to work but Windows may show Unknown Publisher.
 
 ## Security Model
 

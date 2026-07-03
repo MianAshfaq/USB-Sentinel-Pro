@@ -31,6 +31,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private UsbState? _lastSpokenState;
     private string _voiceName = "Windows voice unavailable";
     private bool _connecting;
+    private readonly Dictionary<string, string> _driveResults = new(StringComparer.OrdinalIgnoreCase);
 
     public MainViewModel(Dispatcher dispatcher)
     {
@@ -64,6 +65,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public ObservableCollection<string> Logs { get; } = new();
+    public ObservableCollection<string> DriveStatuses { get; } = new();
     public RelayCommand EnableCommand { get; }
     public RelayCommand DisableCommand { get; }
     public RelayCommand SaveSettingsCommand { get; }
@@ -281,6 +283,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (pipeEvent.Log is not null)
             {
                 var log = pipeEvent.Log;
+                UpdateDriveResult(log);
                 Logs.Add($"[{log.Timestamp.ToLocalTime():HH:mm:ss}] {log.Level,-11} {log.Message}");
                 while (Logs.Count > 500)
                     Logs.RemoveAt(0);
@@ -318,6 +321,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         VoiceAlerts = snapshot.Settings.VoiceAlerts;
         BlockAllUsbDevices = snapshot.Settings.BlockAllUsbDevices;
         WarnBeforeRemediation = snapshot.Settings.WarnBeforeRemediation;
+        var connected = snapshot.ConnectedDrives.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var removed in _driveResults.Keys.Where(root => !connected.Contains(root)).ToArray())
+            _driveResults.Remove(removed);
+        foreach (var drive in snapshot.ConnectedDrives)
+            _driveResults.TryAdd(drive, "DETECTED");
+        RebuildDriveStatuses();
         OnPropertyChanged(nameof(State));
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(ProgressText));
@@ -417,6 +426,35 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     private void AddError(string message) => Logs.Add($"[{DateTime.Now:HH:mm:ss}] ERROR       {message}");
+
+    private void UpdateDriveResult(LogEntry log)
+    {
+        if (string.IsNullOrWhiteSpace(log.Drive))
+            return;
+        var status = log.EventType switch
+        {
+            "DeviceDetected" => "DETECTED",
+            "ScanStarted" => "SCANNING",
+            "ScanClean" => "CLEAN",
+            "ThreatFound" => "THREAT FOUND - BLOCKED",
+            "ScanFailed" => "SCAN FAILED - BLOCKED",
+            "FormatStarted" => "FORMATTING",
+            "FormatCompleted" => "FORMATTED - BLOCKED",
+            "FormatFailed" => "FORMAT FAILED - BLOCKED",
+            _ => null
+        };
+        if (status is null)
+            return;
+        _driveResults[log.Drive] = status;
+        RebuildDriveStatuses();
+    }
+
+    private void RebuildDriveStatuses()
+    {
+        DriveStatuses.Clear();
+        foreach (var drive in _driveResults.OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase))
+            DriveStatuses.Add($"{drive.Key}  -  {drive.Value}");
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
