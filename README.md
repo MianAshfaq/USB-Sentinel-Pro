@@ -1,13 +1,36 @@
 # USB Sentinel Pro
 
-Defensive Windows 11 software that keeps removable USB storage blocked by
-default, requires a password before enabling access, scans removable drives
-with Microsoft Defender, and blocks storage again after disconnection.
+**Password-protected USB storage defense for Windows 11.**
 
-**Developed by Muhammad Ashfaq**
+[![Release](https://img.shields.io/github/v/release/MianAshfaq/USB-Sentinel-Pro?style=flat-square&color=20e38a)](https://github.com/MianAshfaq/USB-Sentinel-Pro/releases/latest)
+[![Windows 11](https://img.shields.io/badge/Windows-11-28b8f7?style=flat-square&logo=windows11)](https://www.microsoft.com/windows/windows-11)
+[![.NET 8](https://img.shields.io/badge/.NET-8.0-512bd4?style=flat-square&logo=dotnet)](https://dotnet.microsoft.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-20e38a?style=flat-square)](LICENSE)
 
-[Website](https://cyberoly.com) | [GitHub](https://github.com/MianAshfaq) |
+USB Sentinel Pro keeps removable storage blocked by default. An administrator
+must authenticate before the service temporarily mounts connected USB drives,
+updates Microsoft Defender security intelligence, scans every detected volume,
+and grants access only when all scans pass. Storage is blocked again after
+disconnection, a failed scan, stale signatures, or an unexpected policy change.
+
+**[Download the latest installer](https://github.com/MianAshfaq/USB-Sentinel-Pro/releases/latest)**
+| [Installation guide](#install)
+| [Security model](#security-model)
+| [Report a security issue](SECURITY.md)
+
+Developed by **Muhammad Ashfaq**
+
+[Cyberoly.com](https://cyberoly.com) | [GitHub](https://github.com/MianAshfaq) |
 [Facebook](https://fb.com/MianAshfaq012)
+
+## How It Protects USB Access
+
+1. USB storage remains blocked by the privileged Windows Service.
+2. The administrator selects **Enable USB** and enters the security password.
+3. Official Microsoft Defender signatures are refreshed when required.
+4. Every connected USB flash drive or portable HDD volume is scanned.
+5. Clean volumes are enabled; threats or scan failures keep all storage blocked.
+6. Defender can quarantine confirmed threats, or the administrator can explicitly format a selected volume.
 
 ## Features
 
