@@ -283,17 +283,20 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (pipeEvent.Log is not null)
             {
                 var log = pipeEvent.Log;
-                UpdateDriveResult(log);
+                var isLiveEvent = pipeEvent.Type == EventType.Log;
+                if (isLiveEvent)
+                    UpdateDriveResult(log);
                 Logs.Add($"[{log.Timestamp.ToLocalTime():HH:mm:ss}] {log.Level,-11} {log.Message}");
                 while (Logs.Count > 500)
                     Logs.RemoveAt(0);
-                if (log.EventType is "DeviceDetected" or "DeviceRemoved" or "ThreatFound" or "ScanFailed" or
-                    "AccessGranted" or "FormatCompleted" or "ThreatRemediation")
+                if (isLiveEvent && log.EventType is ("DeviceDetected" or "DeviceRemoved" or "ThreatFound" or "ScanFailed" or
+                    "AccessGranted" or "FormatCompleted" or "ThreatRemediation"))
                     TrayNotificationRequested?.Invoke(
                         "USB Sentinel Pro",
                         log.Message,
                         log.EventType is "ThreatFound" or "ScanFailed");
-                if (log.Level == LogLevel.Security && log.EventType is "FormatCompleted" or "ThreatRemediation")
+                if (isLiveEvent && log.Level == LogLevel.Security &&
+                    log.EventType is ("FormatCompleted" or "ThreatRemediation"))
                 {
                     _dispatcher.BeginInvoke(async () =>
                     {

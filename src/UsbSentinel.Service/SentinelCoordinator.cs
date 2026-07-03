@@ -171,6 +171,8 @@ public sealed class SentinelCoordinator(
 
     public void OnVolumeRemoved()
     {
+        if (Snapshot.State is UsbState.Disabled or UsbState.Failed or UsbState.ThreatFound)
+            return;
         var drives = GetUsbDrives();
         bool removed;
         bool suppressed;

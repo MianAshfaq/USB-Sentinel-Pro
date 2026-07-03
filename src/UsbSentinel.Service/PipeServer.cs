@@ -76,7 +76,7 @@ public sealed class PipeServer(SentinelCoordinator coordinator, PasswordReposito
             await client.SendAsync(new PipeEvent(
                 SentinelProtocol.Version, EventType.Snapshot, Snapshot: coordinator.Snapshot), serviceToken);
             foreach (var entry in coordinator.RecentLogs)
-                await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.Log, Log: entry), serviceToken);
+                await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.HistoricalLog, Log: entry), serviceToken);
 
             while (pipe.IsConnected && !serviceToken.IsCancellationRequested)
             {
@@ -132,7 +132,7 @@ public sealed class PipeServer(SentinelCoordinator coordinator, PasswordReposito
                 break;
             case CommandType.GetRecentLogs:
                 foreach (var entry in coordinator.RecentLogs)
-                    await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.Log, Log: entry), token);
+                    await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.HistoricalLog, Log: entry), token);
                 break;
             case CommandType.SetPassword:
                 if (passwords.TryCreate(command.Password ?? string.Empty, out var passwordError))

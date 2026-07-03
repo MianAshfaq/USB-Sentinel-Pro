@@ -6,7 +6,7 @@ namespace UsbSentinel.Contracts;
 public static class SentinelProtocol
 {
     public const string PipeName = "UsbSentinelPro";
-    public const int Version = 2;
+    public const int Version = 3;
     public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() }
@@ -44,7 +44,8 @@ public enum EventType
     Log,
     ScanProgress,
     Error,
-    PasswordConfigured
+    PasswordConfigured,
+    HistoricalLog
 }
 
 public enum LogLevel

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.2 - 2026-07-03
+
+- Fixed historical audit entries being replayed as new Windows notifications after reconnecting.
+- Suppressed disconnect handling while protection is already disabled with no active USB operation.
+- Versioned the service protocol so desktop and service agree on live versus historical events.
+
 ## 1.8.1 - 2026-07-03
 
 - Corrected the optional code-signing condition in the GitHub release workflow.
