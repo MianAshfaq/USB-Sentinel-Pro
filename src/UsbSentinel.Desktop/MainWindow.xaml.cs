@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows;
+using MessageBox = System.Windows.MessageBox;
 
 namespace UsbSentinel.Desktop;
 
@@ -19,6 +20,7 @@ public partial class MainWindow : Window
         _viewModel.PasswordPrompt = ShowPasswordDialog;
         _viewModel.ChangePasswordPrompt = ShowChangePasswordDialog;
         _viewModel.FormatUsbPrompt = ShowFormatUsbDialog;
+        _viewModel.PostOperationEnablePrompt = ShowPostOperationEnablePrompt;
         _viewModel.PasswordSetupRequired += OnPasswordSetupRequired;
         _viewModel.TrayStatusChanged += status => ((App)System.Windows.Application.Current).UpdateTrayStatus(status);
         _viewModel.TrayNotificationRequested += (title, message, warning) =>
@@ -82,6 +84,10 @@ public partial class MainWindow : Window
         var dialog = new FormatUsbDialog(drives) { Owner = this };
         return dialog.ShowDialog() == true ? dialog.Request : null;
     }
+
+    private bool ShowPostOperationEnablePrompt(string message) =>
+        MessageBox.Show(this, message, "USB verification required",
+            MessageBoxButton.YesNo, MessageBoxImage.Information, MessageBoxResult.No) == MessageBoxResult.Yes;
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {

@@ -80,6 +80,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public Func<bool, string?>? PasswordPrompt { get; set; }
     public Func<(string CurrentPassword, string NewPassword)?>? ChangePasswordPrompt { get; set; }
     public Func<IReadOnlyList<string>, FormatUsbRequest?>? FormatUsbPrompt { get; set; }
+    public Func<string, bool>? PostOperationEnablePrompt { get; set; }
     public event EventHandler? PasswordSetupRequired;
     public event Action<string>? TrayStatusChanged;
     public event Action<string, string, bool>? TrayNotificationRequested;
@@ -283,11 +284,22 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 Logs.Add($"[{log.Timestamp.ToLocalTime():HH:mm:ss}] {log.Level,-11} {log.Message}");
                 while (Logs.Count > 500)
                     Logs.RemoveAt(0);
-                if (log.EventType is "DeviceDetected" or "DeviceRemoved" or "ThreatFound" or "ScanFailed" or "AccessGranted")
+                if (log.EventType is "DeviceDetected" or "DeviceRemoved" or "ThreatFound" or "ScanFailed" or
+                    "AccessGranted" or "FormatCompleted" or "ThreatRemediation")
                     TrayNotificationRequested?.Invoke(
                         "USB Sentinel Pro",
                         log.Message,
                         log.EventType is "ThreatFound" or "ScanFailed");
+                if (log.Level == LogLevel.Security && log.EventType is "FormatCompleted" or "ThreatRemediation")
+                {
+                    _dispatcher.BeginInvoke(async () =>
+                    {
+                        var prompt = "The operation completed and USB storage remains blocked. " +
+                                     "Scan the connected USB storage again and enable access only if clean?";
+                        if (PostOperationEnablePrompt?.Invoke(prompt) == true)
+                            await EnableUsbAsync();
+                    });
+                }
             }
             if (pipeEvent.Type == EventType.Error && pipeEvent.Message is not null)
                 AddError(pipeEvent.Message);

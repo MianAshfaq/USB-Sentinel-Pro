@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.2 - 2026-07-03
+
+- Added desktop and tray notifications after formatting or Defender remediation.
+- Added an optional password-protected rescan-and-enable prompt after those operations.
+- Kept storage blocked until the fresh Microsoft Defender verification passes.
+
 ## 1.6.1 - 2026-07-03
 
 - Added explicit exFAT or NTFS selection for each chosen USB volume.
