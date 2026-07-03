@@ -10,6 +10,9 @@ permissions:
 jobs:
   release:
     runs-on: windows-latest
+    env:
+      SIGNING_CERTIFICATE: ${{ secrets.CODE_SIGNING_CERTIFICATE_BASE64 }}
+      SIGNING_PASSWORD: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -19,11 +22,8 @@ jobs:
         shell: powershell
         run: .\scripts\build.ps1
       - name: Sign release artifacts
-        if: ${{ secrets.CODE_SIGNING_CERTIFICATE_BASE64 != '' }}
+        if: ${{ env.SIGNING_CERTIFICATE != '' }}
         shell: powershell
-        env:
-          SIGNING_CERTIFICATE: ${{ secrets.CODE_SIGNING_CERTIFICATE_BASE64 }}
-          SIGNING_PASSWORD: ${{ secrets.CODE_SIGNING_CERTIFICATE_PASSWORD }}
         run: .\scripts\sign-release.ps1 -CertificateBase64 $env:SIGNING_CERTIFICATE -CertificatePassword $env:SIGNING_PASSWORD
       - name: Publish GitHub release
         shell: powershell

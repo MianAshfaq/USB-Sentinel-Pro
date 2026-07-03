@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.1 - 2026-07-03
+
+- Corrected the optional code-signing condition in the GitHub release workflow.
+
 ## 1.8.0 - 2026-07-03
 
 - Added faster scan startup by reusing signatures updated within six hours.
