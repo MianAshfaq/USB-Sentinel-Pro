@@ -1,0 +1,89 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="USB Sentinel Pro"
+           Manufacturer="Muhammad Ashfaq"
+           Version="1.5.0"
+           UpgradeCode="{812B28E6-D9AE-44B1-A922-9ED74608E13C}"
+           Scope="perMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of USB Sentinel Pro is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+    <Property Id="ARPPRODUCTICON" Value="UsbSentinelIcon" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="USB Sentinel Pro">
+        <Directory Id="SERVICEFOLDER" Name="Service" />
+        <Directory Id="DESKTOPFOLDER" Name="Desktop" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="USB Sentinel Pro" />
+    </StandardDirectory>
+    <Icon Id="UsbSentinelIcon" SourceFile="..\src\UsbSentinel.Desktop\Assets\UsbSentinel.ico" />
+
+    <Feature Id="ProductFeature" Title="USB Sentinel Pro" Level="1">
+      <ComponentGroupRef Id="ServiceFiles" />
+      <ComponentGroupRef Id="DesktopFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+  </Package>
+
+  <Fragment>
+      <ComponentGroup Id="ServiceFiles" Directory="SERVICEFOLDER">
+        <Files Include="..\artifacts\service\**">
+          <Exclude Files="..\artifacts\service\UsbSentinel.Service.exe" />
+        </Files>
+        <Component Id="SentinelServiceRegistration" Bitness="always64">
+          <File Id="ServiceExecutable" Source="..\artifacts\service\UsbSentinel.Service.exe" KeyPath="yes" />
+          <ServiceInstall Id="ServiceInstaller"
+                          Name="UsbSentinelPro"
+                          DisplayName="USB Sentinel Pro Service"
+                          Description="Controls removable USB storage and Microsoft Defender scanning."
+                          Type="ownProcess"
+                          Start="auto"
+                          ErrorControl="critical"
+                          Account="LocalSystem"
+                          Vital="yes" />
+          <ServiceControl Id="ServiceControl"
+                          Name="UsbSentinelPro"
+                          Start="install"
+                          Stop="both"
+                          Remove="uninstall"
+                          Wait="yes" />
+        </Component>
+      </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+      <ComponentGroup Id="DesktopFiles" Directory="DESKTOPFOLDER">
+        <Files Include="..\artifacts\desktop\**" />
+      </ComponentGroup>
+      <DirectoryRef Id="ApplicationProgramsFolder">
+        <Component Id="StartMenuShortcut" Guid="{9BE8E333-EEDA-45AC-A14D-C20CC7774431}">
+          <Shortcut Id="ApplicationStartMenuShortcut"
+                    Name="USB Sentinel Pro"
+                    Description="Controlled USB storage security"
+                    Target="[DESKTOPFOLDER]UsbSentinel.Desktop.exe"
+                    WorkingDirectory="DESKTOPFOLDER"
+                    Icon="UsbSentinelIcon" />
+          <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+          <RegistryValue Root="HKCU" Key="Software\USB Sentinel Pro"
+                         Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+      </DirectoryRef>
+      <StandardDirectory Id="DesktopFolder">
+        <Component Id="DesktopShortcut" Guid="{6410801F-52D0-4FC9-A8B8-314297C23F0A}">
+          <Shortcut Id="ApplicationDesktopShortcut"
+                    Name="USB Sentinel Pro"
+                    Description="Secure USB storage scanning and access control"
+                    Target="[DESKTOPFOLDER]UsbSentinel.Desktop.exe"
+                    WorkingDirectory="DESKTOPFOLDER"
+                    Icon="UsbSentinelIcon" />
+          <RegistryValue Root="HKCU" Key="Software\USB Sentinel Pro"
+                         Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+      </StandardDirectory>
+  </Fragment>
+</Wix>
