@@ -72,4 +72,25 @@ public sealed class ProtocolTests
 
         Assert.False(snapshot.PasswordConfigured);
     }
+
+    [Fact]
+    public void FormatCommand_RoundTripsEverySafetyField()
+    {
+        var command = new PipeCommand(
+            SentinelProtocol.Version,
+            CommandType.FormatUsb,
+            Password: "TestPassword9",
+            Drive: @"E:\",
+            Confirmation: "ERASE E:",
+            QuickFormat: false);
+
+        var json = JsonSerializer.Serialize(command, SentinelProtocol.JsonOptions);
+        var deserialized = JsonSerializer.Deserialize<PipeCommand>(json, SentinelProtocol.JsonOptions);
+
+        Assert.NotNull(deserialized);
+        Assert.Equal(CommandType.FormatUsb, deserialized.Type);
+        Assert.Equal(@"E:\", deserialized.Drive);
+        Assert.Equal("ERASE E:", deserialized.Confirmation);
+        Assert.False(deserialized.QuickFormat);
+    }
 }

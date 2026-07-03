@@ -18,6 +18,7 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
         _viewModel.PasswordPrompt = ShowPasswordDialog;
         _viewModel.ChangePasswordPrompt = ShowChangePasswordDialog;
+        _viewModel.FormatUsbPrompt = ShowFormatUsbDialog;
         _viewModel.PasswordSetupRequired += OnPasswordSetupRequired;
         _viewModel.TrayStatusChanged += status => ((App)System.Windows.Application.Current).UpdateTrayStatus(status);
         _viewModel.TrayNotificationRequested += (title, message, warning) =>
@@ -74,6 +75,12 @@ public partial class MainWindow : Window
         return dialog.ShowDialog() == true
             ? (dialog.CurrentPassword, dialog.NewPassword)
             : null;
+    }
+
+    private FormatUsbRequest? ShowFormatUsbDialog(IReadOnlyList<string> drives)
+    {
+        var dialog = new FormatUsbDialog(drives) { Owner = this };
+        return dialog.ShowDialog() == true ? dialog.Request : null;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)

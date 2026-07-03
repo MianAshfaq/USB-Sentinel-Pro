@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.6.0 - 2026-07-03
+
+- Fixed repeated USB notifications caused by policy-generated WMI events.
+- Added USB bus-aware detection for flash drives and portable USB HDD volumes.
+- Added password-protected Microsoft Defender remediation for confirmed threats.
+- Added guarded quick/full exFAT formatting with typed and final confirmations.
+- Added clickable website, GitHub, and Facebook icons beside the developer credit.
+- Improved failure reporting and fail-closed state accuracy for advanced operations.
+
 ## 1.5.0 - 2026-07-03
 
 - Added persistent system-tray monitoring and USB security notifications.

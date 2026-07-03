@@ -107,6 +107,11 @@
                         <TextBlock Text="DEVELOPED BY" FontSize="9" Foreground="{StaticResource MutedBrush}"/>
                         <TextBlock Text="MUHAMMAD ASHFAQ" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource GreenBrush}"/>
                     </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="12,0,0,0">
+                        <Button Command="{Binding OpenWebsiteCommand}" Width="32" Height="32" Padding="0" Margin="0,0,5,0" ToolTip="Cyberoly.com"><fa:IconBlock Icon="Globe"/></Button>
+                        <Button Command="{Binding OpenGitHubCommand}" Width="32" Height="32" Padding="0" Margin="0,0,5,0" ToolTip="GitHub"><fa:IconBlock Icon="Github"/></Button>
+                        <Button Command="{Binding OpenFacebookCommand}" Width="32" Height="32" Padding="0" ToolTip="Facebook"><fa:IconBlock Icon="Facebook"/></Button>
+                    </StackPanel>
                 </StackPanel>
             </Grid>
         </Border>
@@ -299,6 +304,12 @@
                                 <Button Command="{Binding OpenSecurityCommand}" Margin="6,0,0,0" Padding="10,8" ToolTip="Open Windows Security history">
                                     <StackPanel Orientation="Horizontal"><fa:IconBlock Icon="Shield" Margin="0,0,7,0"/><TextBlock Text="HISTORY"/></StackPanel>
                                 </Button>
+                                <Button Command="{Binding RemediateThreatsCommand}" Margin="0,7,6,0" Padding="10,8" ToolTip="Ask Defender to remediate confirmed threats">
+                                    <StackPanel Orientation="Horizontal"><fa:IconBlock Icon="ShieldVirus" Margin="0,0,7,0"/><TextBlock Text="REMEDIATE"/></StackPanel>
+                                </Button>
+                                <Button Command="{Binding FormatUsbCommand}" Margin="6,7,0,0" Padding="10,8" ToolTip="Erase and format a selected USB volume">
+                                    <StackPanel Orientation="Horizontal"><fa:IconBlock Icon="HardDrive" Margin="0,0,7,0"/><TextBlock Text="FORMAT USB"/></StackPanel>
+                                </Button>
                             </UniformGrid>
                             <Separator Background="{StaticResource BorderBrush}" Margin="0,18"/>
                             <TextBlock Text="Developed by Muhammad Ashfaq" Foreground="{StaticResource GreenBrush}"
@@ -346,7 +357,7 @@
                             </StackPanel>
                             <Separator Background="{StaticResource BorderBrush}" Margin="0,24"/>
                             <TextBlock Text="EDITION" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
-                            <TextBlock Text="Community 1.4" Margin="0,7,0,0" FontWeight="SemiBold"/>
+                            <TextBlock Text="Community 1.6" Margin="0,7,0,0" FontWeight="SemiBold"/>
                             <TextBlock Text="Microsoft Defender integration" Margin="0,20,0,0" Foreground="{StaticResource MutedBrush}"/>
                             <TextBlock Text="Windows 11 x64" Margin="0,5,0,0" Foreground="{StaticResource MutedBrush}"/>
                         </StackPanel>

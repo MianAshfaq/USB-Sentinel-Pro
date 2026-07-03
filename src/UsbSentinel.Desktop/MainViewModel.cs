@@ -43,6 +43,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ExportLogsCommand = new RelayCommand(ExportLogsAsync);
         RefreshCommand = new RelayCommand(RefreshAsync, () => _connected);
         OpenSecurityCommand = new RelayCommand(OpenWindowsSecurityAsync);
+        RemediateThreatsCommand = new RelayCommand(RemediateThreatsAsync, () => _connected && PasswordConfigured);
+        FormatUsbCommand = new RelayCommand(FormatUsbAsync, () => _connected && (_snapshot?.ConnectedDrives.Count ?? 0) > 0);
         OpenFacebookCommand = new RelayCommand(() => OpenUrlAsync("https://fb.com/MianAshfaq012"));
         OpenGitHubCommand = new RelayCommand(() => OpenUrlAsync("https://github.com/MianAshfaq"));
         OpenWebsiteCommand = new RelayCommand(() => OpenUrlAsync("https://cyberoly.com"));
@@ -70,11 +72,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public RelayCommand ExportLogsCommand { get; }
     public RelayCommand RefreshCommand { get; }
     public RelayCommand OpenSecurityCommand { get; }
+    public RelayCommand RemediateThreatsCommand { get; }
+    public RelayCommand FormatUsbCommand { get; }
     public RelayCommand OpenFacebookCommand { get; }
     public RelayCommand OpenGitHubCommand { get; }
     public RelayCommand OpenWebsiteCommand { get; }
     public Func<bool, string?>? PasswordPrompt { get; set; }
     public Func<(string CurrentPassword, string NewPassword)?>? ChangePasswordPrompt { get; set; }
+    public Func<IReadOnlyList<string>, FormatUsbRequest?>? FormatUsbPrompt { get; set; }
     public event EventHandler? PasswordSetupRequired;
     public event Action<string>? TrayStatusChanged;
     public event Action<string, string, bool>? TrayNotificationRequested;
@@ -120,6 +125,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             SaveSettingsCommand.RaiseCanExecuteChanged();
             ChangePasswordCommand.RaiseCanExecuteChanged();
             RefreshCommand.RaiseCanExecuteChanged();
+            RemediateThreatsCommand.RaiseCanExecuteChanged();
+            FormatUsbCommand.RaiseCanExecuteChanged();
         }
     }
 
@@ -225,6 +232,29 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         return Task.CompletedTask;
     }
 
+    private async Task RemediateThreatsAsync()
+    {
+        var password = PasswordPrompt?.Invoke(false);
+        if (string.IsNullOrEmpty(password))
+            return;
+        if (System.Windows.MessageBox.Show(
+                "Ask Microsoft Defender to remove or quarantine confirmed active threats? USB storage remains blocked.",
+                "Defender remediation", System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning, System.Windows.MessageBoxResult.No) != System.Windows.MessageBoxResult.Yes)
+            return;
+        await _client.SendAsync(CommandType.RemediateThreats, password: password);
+    }
+
+    private async Task FormatUsbAsync()
+    {
+        var drives = _snapshot?.ConnectedDrives ?? Array.Empty<string>();
+        var request = FormatUsbPrompt?.Invoke(drives);
+        if (request is null)
+            return;
+        await _client.SendAsync(CommandType.FormatUsb, password: request.Password, drive: request.Drive,
+            confirmation: request.Confirmation, quickFormat: request.QuickFormat);
+    }
+
     private static Task OpenUrlAsync(string url)
     {
         Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
@@ -286,6 +316,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(DefenderStatusText));
         OnPropertyChanged(nameof(DefenderSignatureText));
         ChangePasswordCommand.RaiseCanExecuteChanged();
+        RemediateThreatsCommand.RaiseCanExecuteChanged();
+        FormatUsbCommand.RaiseCanExecuteChanged();
         TrayStatusChanged?.Invoke(snapshot.StatusText);
         if (!snapshot.PasswordConfigured)
             PasswordSetupRequired?.Invoke(this, EventArgs.Empty);

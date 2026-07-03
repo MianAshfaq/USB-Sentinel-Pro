@@ -15,7 +15,9 @@ with Microsoft Defender, and blocks storage again after disconnection.
 - Password required for every USB-enable request.
 - Salted PBKDF2-SHA256 password verifier with failed-attempt lockout.
 - Microsoft Defender signature updates, custom scans, and remediation results.
-- WMI USB insert/remove monitoring with automatic fail-closed blocking.
+- WMI USB insert/remove monitoring with event deduplication and automatic fail-closed blocking.
+- USB bus-aware discovery for flash drives and mounted portable HDD volumes.
+- Password-protected Defender remediation and guarded exFAT formatting tools.
 - System-tray monitoring after the dashboard is closed.
 - Female Windows voice preference, voice test, and state announcements.
 - Defender health/signature status, audit export, and Security History access.
@@ -72,6 +74,9 @@ binaries, and creates `artifacts\installer\USB-Sentinel-Pro-Setup.msi`.
   fail-closed storage policy.
 - Defender performs malware detection and remediation; the app never directly
   deletes user files.
+- Formatting is intentionally destructive and requires a selected USB volume,
+  password, typed drive confirmation, and final warning. Quick format is not
+  secure erasure and no antivirus can guarantee detection of every threat.
 - "Block all USB devices" restricts new unspecified device installations. It
   deliberately does not retroactively disable existing keyboards and mice.
 

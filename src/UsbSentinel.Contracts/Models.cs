@@ -32,7 +32,9 @@ public enum CommandType
     UpdateSettings,
     GetRecentLogs,
     SetPassword,
-    ChangePassword
+    ChangePassword,
+    RemediateThreats,
+    FormatUsb
 }
 
 public enum EventType
@@ -79,7 +81,10 @@ public sealed record PipeCommand(
     CommandType Type,
     SentinelSettings? Settings = null,
     string? Password = null,
-    string? NewPassword = null);
+    string? NewPassword = null,
+    string? Drive = null,
+    string? Confirmation = null,
+    bool QuickFormat = true);
 
 public sealed record PipeEvent(
     int ProtocolVersion,

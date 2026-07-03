@@ -163,6 +163,33 @@ public sealed class PipeServer(SentinelCoordinator coordinator, PasswordReposito
                         SentinelProtocol.Version, EventType.Error, Message: changeError), token);
                 }
                 break;
+            case CommandType.RemediateThreats:
+                if (!passwords.Verify(command.Password, out var remediationError))
+                {
+                    coordinator.RecordAuthenticationFailure(remediationError);
+                    await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.Error, Message: remediationError), token);
+                    break;
+                }
+                _ = coordinator.RemediateThreatsAsync(token);
+                break;
+            case CommandType.FormatUsb:
+                if (!passwords.Verify(command.Password, out var formatError))
+                {
+                    coordinator.RecordAuthenticationFailure(formatError);
+                    await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.Error, Message: formatError), token);
+                    break;
+                }
+                string? root;
+                try { root = command.Drive is null ? null : UsbDriveInventory.NormalizeRoot(command.Drive); }
+                catch (ArgumentException) { root = null; }
+                if (root is null || !string.Equals(command.Confirmation, $"ERASE {root[..2]}", StringComparison.Ordinal))
+                {
+                    await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.Error,
+                        Message: "The erase confirmation phrase is invalid."), token);
+                    break;
+                }
+                _ = coordinator.FormatUsbAsync(root, command.QuickFormat, token);
+                break;
         }
     }
 

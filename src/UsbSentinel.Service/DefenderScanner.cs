@@ -51,9 +51,7 @@ public sealed class DefenderScanner
         progress(90);
 
         var output = result.Output;
-        var threatFound = result.ExitCode == 2 ||
-            output.Contains("threat", StringComparison.OrdinalIgnoreCase) &&
-            !output.Contains("no threats", StringComparison.OrdinalIgnoreCase);
+        var threatFound = result.ExitCode == 2;
         var succeeded = result.ExitCode is 0 or 2;
 
         // MpCmdRun invokes Defender's configured remediation policy. We never delete files ourselves.
@@ -70,16 +68,36 @@ public sealed class DefenderScanner
         return new DefenderScanResult(root, succeeded, threatFound, threatFound, remediationSucceeded, result.ExitCode, summary);
     }
 
+    public async Task<bool> RemediateThreatsAsync(Action<string> log, CancellationToken cancellationToken)
+    {
+        log("Requesting Microsoft Defender remediation for confirmed active threats.");
+        var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        var result = await RunProcessAsync(
+            powershell,
+            "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"Remove-MpThreat -ErrorAction Stop\"",
+            cancellationToken);
+        log(result.Output);
+        return result.ExitCode == 0;
+    }
+
     private async Task<(int ExitCode, string Output)> RunAsync(
         string arguments,
         string? quotedArgument,
         CancellationToken cancellationToken)
     {
         var executable = _mpCmdRun ?? throw new InvalidOperationException("Microsoft Defender is unavailable.");
+        return await RunProcessAsync(executable,
+            quotedArgument is null ? arguments : $"{arguments} \"{quotedArgument.Replace("\"", "\\\"")}\"",
+            cancellationToken);
+    }
+
+    public static async Task<(int ExitCode, string Output)> RunProcessAsync(
+        string executable, string arguments, CancellationToken cancellationToken)
+    {
         var psi = new ProcessStartInfo
         {
             FileName = executable,
-            Arguments = quotedArgument is null ? arguments : $"{arguments} \"{quotedArgument.Replace("\"", "\\\"")}\"",
+            Arguments = arguments,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,

@@ -37,6 +37,9 @@ public sealed class ServiceClient : IDisposable
         SentinelSettings? settings = null,
         string? password = null,
         string? newPassword = null,
+        string? drive = null,
+        string? confirmation = null,
+        bool quickFormat = true,
         CancellationToken token = default)
     {
         if (_writer is null)
@@ -44,7 +47,9 @@ public sealed class ServiceClient : IDisposable
         await _writeLock.WaitAsync(token);
         try
         {
-            var payload = new PipeCommand(SentinelProtocol.Version, command, settings, password, newPassword);
+            var payload = new PipeCommand(
+                SentinelProtocol.Version, command, settings, password, newPassword,
+                drive, confirmation, quickFormat);
             await _writer.WriteLineAsync(JsonSerializer.Serialize(payload, SentinelProtocol.JsonOptions));
         }
         finally

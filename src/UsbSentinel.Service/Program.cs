@@ -8,6 +8,7 @@ builder.Services.AddSingleton<LogRepository>();
 builder.Services.AddSingleton<SettingsRepository>();
 builder.Services.AddSingleton<PasswordRepository>();
 builder.Services.AddSingleton<UsbPolicyController>();
+builder.Services.AddSingleton<UsbDriveInventory>();
 builder.Services.AddSingleton<DefenderScanner>();
 builder.Services.AddSingleton<SentinelCoordinator>();
 builder.Services.AddSingleton<PipeServer>();
