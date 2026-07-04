@@ -203,6 +203,8 @@
                                         BorderThickness="1" CornerRadius="6" Padding="16" Margin="0,24,0,0">
                                     <StackPanel>
                                         <TextBlock Text="DETECTED DRIVES" Foreground="{StaticResource BlueBrush}" FontSize="11"/>
+                                        <TextBlock Text="{Binding DetectedHardwareText}" Margin="0,7,0,2" TextWrapping="Wrap"
+                                                   Foreground="{StaticResource MutedBrush}" FontSize="11"/>
                                         <ItemsControl ItemsSource="{Binding DriveStatuses}" Margin="0,7,0,0">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate><TextBlock Text="{Binding}" FontFamily="Cascadia Mono" Foreground="{StaticResource TextBrush}" Margin="0,2"/></DataTemplate>
@@ -313,6 +315,9 @@
                                 <Button Command="{Binding FormatUsbCommand}" Margin="6,7,0,0" Padding="10,8" ToolTip="Erase and format a selected USB volume">
                                     <StackPanel Orientation="Horizontal"><fa:IconBlock Icon="HardDrive" Margin="0,0,7,0"/><TextBlock Text="FORMAT USB"/></StackPanel>
                                 </Button>
+                                <Button Command="{Binding ResetPasswordCommand}" Margin="0,7,6,0" Padding="10,8" ToolTip="Administrator recovery for a forgotten password">
+                                    <StackPanel Orientation="Horizontal"><fa:IconBlock Icon="UnlockKeyhole" Margin="0,0,7,0"/><TextBlock Text="RESET PASSWORD"/></StackPanel>
+                                </Button>
                             </UniformGrid>
                             <Separator Background="{StaticResource BorderBrush}" Margin="0,18"/>
                             <TextBlock Text="Developed by Muhammad Ashfaq" Foreground="{StaticResource GreenBrush}"
@@ -360,7 +365,7 @@
                             </StackPanel>
                             <Separator Background="{StaticResource BorderBrush}" Margin="0,24"/>
                             <TextBlock Text="EDITION" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
-                            <TextBlock Text="Community 1.8.2" Margin="0,7,0,0" FontWeight="SemiBold"/>
+                            <TextBlock Text="Community 1.9.0" Margin="0,7,0,0" FontWeight="SemiBold"/>
                             <TextBlock Text="Microsoft Defender integration" Margin="0,20,0,0" Foreground="{StaticResource MutedBrush}"/>
                             <TextBlock Text="Windows 11 x64" Margin="0,5,0,0" Foreground="{StaticResource MutedBrush}"/>
                         </StackPanel>

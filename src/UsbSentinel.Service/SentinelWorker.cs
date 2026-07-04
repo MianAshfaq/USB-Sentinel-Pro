@@ -9,6 +9,7 @@ public sealed class SentinelWorker(
 {
     private ManagementEventWatcher? _insertWatcher;
     private ManagementEventWatcher? _removeWatcher;
+    private ManagementEventWatcher? _hardwareWatcher;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -30,8 +31,11 @@ public sealed class SentinelWorker(
     {
         _insertWatcher = CreateWatcher(2, (_, _) => coordinator.OnVolumeInserted());
         _removeWatcher = CreateWatcher(3, (_, _) => coordinator.OnVolumeRemoved());
+        _hardwareWatcher = new ManagementEventWatcher(new WqlEventQuery("SELECT * FROM Win32_DeviceChangeEvent"));
+        _hardwareWatcher.EventArrived += (_, _) => coordinator.OnHardwareChanged();
         _insertWatcher.Start();
         _removeWatcher.Start();
+        _hardwareWatcher.Start();
     }
 
     private static ManagementEventWatcher CreateWatcher(int eventType, EventArrivedEventHandler handler)
@@ -45,7 +49,7 @@ public sealed class SentinelWorker(
 
     private void StopWatchers()
     {
-        foreach (var watcher in new[] { _insertWatcher, _removeWatcher })
+        foreach (var watcher in new[] { _insertWatcher, _removeWatcher, _hardwareWatcher })
         {
             if (watcher is null)
                 continue;

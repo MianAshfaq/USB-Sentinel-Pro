@@ -41,6 +41,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         SaveSettingsCommand = new RelayCommand(SaveSettingsAsync, () => _connected);
         TestVoiceCommand = new RelayCommand(TestVoiceAsync);
         ChangePasswordCommand = new RelayCommand(ChangePasswordAsync, () => _connected && PasswordConfigured);
+        ResetPasswordCommand = new RelayCommand(ResetPasswordAsync, () => _connected);
         ExportLogsCommand = new RelayCommand(ExportLogsAsync);
         RefreshCommand = new RelayCommand(RefreshAsync, () => _connected);
         OpenSecurityCommand = new RelayCommand(OpenWindowsSecurityAsync);
@@ -71,6 +72,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public RelayCommand SaveSettingsCommand { get; }
     public RelayCommand TestVoiceCommand { get; }
     public RelayCommand ChangePasswordCommand { get; }
+    public RelayCommand ResetPasswordCommand { get; }
     public RelayCommand ExportLogsCommand { get; }
     public RelayCommand RefreshCommand { get; }
     public RelayCommand OpenSecurityCommand { get; }
@@ -81,6 +83,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public RelayCommand OpenWebsiteCommand { get; }
     public Func<bool, string?>? PasswordPrompt { get; set; }
     public Func<(string CurrentPassword, string NewPassword)?>? ChangePasswordPrompt { get; set; }
+    public Func<string?>? ResetPasswordPrompt { get; set; }
     public Func<IReadOnlyList<string>, FormatUsbRequest?>? FormatUsbPrompt { get; set; }
     public Func<string, bool>? PostOperationEnablePrompt { get; set; }
     public event EventHandler? PasswordSetupRequired;
@@ -93,6 +96,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string ConnectedDrivesText => _snapshot?.ConnectedDrives.Count > 0
         ? string.Join("   ", _snapshot.ConnectedDrives)
         : "NONE";
+    public string DetectedHardwareText => _snapshot?.DetectedDevices is { Count: > 0 } devices
+        ? string.Join(Environment.NewLine, devices.Select(device => $"{device.Name}  -  {device.Status}"))
+        : "No USB storage hardware detected";
     public string LastUpdatedText => _snapshot is null ? "" : $"UPDATED {_snapshot.UpdatedAt.ToLocalTime():HH:mm:ss}";
     public string ConnectionText => Connected ? "SERVICE ONLINE" : "SERVICE OFFLINE";
     public string VoiceName { get => _voiceName; private set => Set(ref _voiceName, value); }
@@ -127,6 +133,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             DisableCommand.RaiseCanExecuteChanged();
             SaveSettingsCommand.RaiseCanExecuteChanged();
             ChangePasswordCommand.RaiseCanExecuteChanged();
+            ResetPasswordCommand.RaiseCanExecuteChanged();
             RefreshCommand.RaiseCanExecuteChanged();
             RemediateThreatsCommand.RaiseCanExecuteChanged();
             FormatUsbCommand.RaiseCanExecuteChanged();
@@ -201,6 +208,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 CommandType.ChangePassword,
                 password: passwords.Value.CurrentPassword,
                 newPassword: passwords.Value.NewPassword);
+        }
+        catch (Exception ex) { AddError(ex.Message); }
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        var password = ResetPasswordPrompt?.Invoke();
+        if (string.IsNullOrEmpty(password))
+            return;
+        try
+        {
+            await _client.SendAsync(CommandType.ResetPassword, newPassword: password);
         }
         catch (Exception ex) { AddError(ex.Message); }
     }
@@ -334,12 +353,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(ProgressText));
         OnPropertyChanged(nameof(ConnectedDrivesText));
+        OnPropertyChanged(nameof(DetectedHardwareText));
         OnPropertyChanged(nameof(LastUpdatedText));
         OnPropertyChanged(nameof(StatusBrush));
         OnPropertyChanged(nameof(PasswordConfigured));
         OnPropertyChanged(nameof(DefenderStatusText));
         OnPropertyChanged(nameof(DefenderSignatureText));
         ChangePasswordCommand.RaiseCanExecuteChanged();
+        ResetPasswordCommand.RaiseCanExecuteChanged();
         RemediateThreatsCommand.RaiseCanExecuteChanged();
         FormatUsbCommand.RaiseCanExecuteChanged();
         TrayStatusChanged?.Invoke(snapshot.StatusText);

@@ -10,15 +10,17 @@ public sealed class UsbPolicyController
 
     public bool IsStorageBlocked()
     {
-        using var key = Registry.LocalMachine.OpenSubKey(UsbStorPath);
-        return Convert.ToInt32(key?.GetValue("Start", 3)) == 4;
+        using var key = Registry.LocalMachine.OpenSubKey(RemovableStoragePath);
+        return Convert.ToInt32(key?.GetValue("Deny_All", 0)) == 1;
     }
 
     public void BlockStorage()
     {
-        SetDword(UsbStorPath, "Start", 4);
+        // Keep the driver available so Windows can identify hardware while policy denies access.
+        SetDword(UsbStorPath, "Start", 3);
         SetDword(RemovableStoragePath, "Deny_All", 1);
         BroadcastPolicyChange();
+        RescanDevices();
     }
 
     public void AllowStorageForScan()

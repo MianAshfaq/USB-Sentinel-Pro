@@ -33,6 +33,7 @@ public enum CommandType
     GetRecentLogs,
     SetPassword,
     ChangePassword,
+    ResetPassword,
     RemediateThreats,
     FormatUsb
 }
@@ -75,7 +76,10 @@ public sealed record ServiceSnapshot(
     DateTimeOffset UpdatedAt,
     bool PasswordConfigured = false,
     bool DefenderAvailable = false,
-    string DefenderSignatureVersion = "Unknown");
+    string DefenderSignatureVersion = "Unknown",
+    IReadOnlyList<UsbDeviceInfo>? DetectedDevices = null);
+
+public sealed record UsbDeviceInfo(string Id, string Name, string Status);
 
 public sealed record PipeCommand(
     int ProtocolVersion,

@@ -95,4 +95,21 @@ public sealed class ProtocolTests
         Assert.False(deserialized.QuickFormat);
         Assert.Equal("NTFS", deserialized.FileSystem);
     }
+
+    [Fact]
+    public void ResetPasswordCommand_CarriesOnlyTheNewPassword()
+    {
+        var command = new PipeCommand(
+            SentinelProtocol.Version,
+            CommandType.ResetPassword,
+            NewPassword: "ReplacementPassword9");
+
+        var json = JsonSerializer.Serialize(command, SentinelProtocol.JsonOptions);
+        var deserialized = JsonSerializer.Deserialize<PipeCommand>(json, SentinelProtocol.JsonOptions);
+
+        Assert.NotNull(deserialized);
+        Assert.Equal(CommandType.ResetPassword, deserialized.Type);
+        Assert.Null(deserialized.Password);
+        Assert.Equal("ReplacementPassword9", deserialized.NewPassword);
+    }
 }

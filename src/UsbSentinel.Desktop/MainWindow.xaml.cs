@@ -19,6 +19,7 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
         _viewModel.PasswordPrompt = ShowPasswordDialog;
         _viewModel.ChangePasswordPrompt = ShowChangePasswordDialog;
+        _viewModel.ResetPasswordPrompt = ShowResetPasswordDialog;
         _viewModel.FormatUsbPrompt = ShowFormatUsbDialog;
         _viewModel.PostOperationEnablePrompt = ShowPostOperationEnablePrompt;
         _viewModel.PasswordSetupRequired += OnPasswordSetupRequired;
@@ -77,6 +78,18 @@ public partial class MainWindow : Window
         return dialog.ShowDialog() == true
             ? (dialog.CurrentPassword, dialog.NewPassword)
             : null;
+    }
+
+    private string? ShowResetPasswordDialog()
+    {
+        var warning = "Resetting the USB password allows a local Windows administrator to replace a forgotten password. " +
+                      "The action is recorded in the security audit log. Continue?";
+        if (MessageBox.Show(this, warning, "Administrator password reset",
+                MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes)
+            return null;
+        var dialog = new PasswordDialog(true) { Owner = this, Title = "Reset USB Sentinel Password" };
+        dialog.UseResetMode();
+        return dialog.ShowDialog() == true ? dialog.Password : null;
     }
 
     private FormatUsbRequest? ShowFormatUsbDialog(IReadOnlyList<string> drives)

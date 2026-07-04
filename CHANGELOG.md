@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.0 - 2026-07-04
+
+- Added hardware-level USB storage discovery before drive letters are mounted.
+- Added support for detecting both USBSTOR flash drives and UASP portable HDD/SSD devices.
+- Added dashboard hardware names alongside mounted-volume scan results.
+- Added audited administrator-only recovery for forgotten USB enable passwords.
+
 ## 1.8.2 - 2026-07-03
 
 - Fixed historical audit entries being replayed as new Windows notifications after reconnecting.

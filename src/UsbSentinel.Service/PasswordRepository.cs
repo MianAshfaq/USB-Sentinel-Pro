@@ -119,7 +119,12 @@ public sealed class PasswordRepository(LogRepository logs)
     {
         if (!Verify(currentPassword, out error))
             return false;
-        if (newPassword is null || !ValidateStrength(newPassword, out error))
+        if (newPassword is null)
+        {
+            error = "A new password is required.";
+            return false;
+        }
+        if (!ValidateStrength(newPassword, out error))
             return false;
 
         var salt = RandomNumberGenerator.GetBytes(32);
@@ -138,6 +143,47 @@ public sealed class PasswordRepository(LogRepository logs)
             {
                 error = "Password configuration was not found.";
                 return false;
+            }
+            error = string.Empty;
+            return true;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(hash);
+        }
+    }
+
+    public bool TryReset(string? newPassword, out string error)
+    {
+        if (newPassword is null)
+        {
+            error = "A new password is required.";
+            return false;
+        }
+        if (!ValidateStrength(newPassword, out error))
+            return false;
+
+        var salt = RandomNumberGenerator.GetBytes(32);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(newPassword, salt, Iterations, HashAlgorithmName.SHA256, 32);
+        try
+        {
+            using var connection = new SqliteConnection(logs.ConnectionString);
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                INSERT INTO SecuritySecrets(Name, Salt, Hash, Iterations)
+                VALUES('EnablePassword', $salt, $hash, $iterations)
+                ON CONFLICT(Name) DO UPDATE SET Salt = excluded.Salt, Hash = excluded.Hash, Iterations = excluded.Iterations;
+                """;
+            command.Parameters.AddWithValue("$salt", salt);
+            command.Parameters.AddWithValue("$hash", hash);
+            command.Parameters.AddWithValue("$iterations", Iterations);
+            command.ExecuteNonQuery();
+            lock (_gate)
+            {
+                _failedAttempts = 0;
+                _lockedUntil = default;
             }
             error = string.Empty;
             return true;

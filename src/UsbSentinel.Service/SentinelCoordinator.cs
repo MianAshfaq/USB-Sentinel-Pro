@@ -15,6 +15,7 @@ public sealed class SentinelCoordinator(
     private readonly object _stateLock = new();
     private readonly object _deviceLock = new();
     private HashSet<string> _knownUsbVolumes = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> _knownUsbDevices = new(StringComparer.OrdinalIgnoreCase);
     private DateTimeOffset _suppressVolumeEventsUntil;
     private CancellationTokenSource? _operationCancellation;
     private SentinelSettings _settings = settingsRepository.Load();
@@ -45,6 +46,8 @@ public sealed class SentinelCoordinator(
     {
         BlockStorage();
         policy.SetBlockAllUsb(_settings.BlockAllUsbDevices);
+        _knownUsbDevices = inventory.GetConnectedUsbStorageDevices().Select(device => device.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         SetState(UsbState.Disabled, "USB storage is disabled.", 0, Array.Empty<string>());
         PublishLog(LogLevel.Security, "ServiceStarted", "Service started with USB storage blocked.");
     }
@@ -65,7 +68,7 @@ public sealed class SentinelCoordinator(
             PublishLog(LogLevel.Security, "EnableRequested", "Administrator requested controlled USB enable.");
             policy.AllowStorageForScan();
 
-            var drives = await WaitForRemovableDrivesAsync(TimeSpan.FromSeconds(20), token);
+            var drives = await WaitForRemovableDrivesAsync(TimeSpan.FromSeconds(45), token);
             if (drives.Count == 0)
             {
                 BlockStorage();
@@ -201,10 +204,42 @@ public sealed class SentinelCoordinator(
         }
         if (added.Length == 0)
             return;
-        PublishLog(LogLevel.Information, "DeviceDetected", "USB storage device detected.", added[0]);
+        PublishLog(LogLevel.Information, "VolumeMounted", "USB storage volume mounted for inspection.", added[0]);
         var current = Snapshot;
         if (current.State == UsbState.Disabled)
             SetState(UsbState.Disabled, "USB detected. Click Enable USB to scan it.", 0, drives);
+    }
+
+    public void OnHardwareChanged()
+    {
+        try
+        {
+            var devices = inventory.GetConnectedUsbStorageDevices();
+            var ids = devices.Select(device => device.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            string[] added;
+            lock (_deviceLock)
+            {
+                added = ids.Except(_knownUsbDevices, StringComparer.OrdinalIgnoreCase).ToArray();
+                _knownUsbDevices = ids;
+            }
+            lock (_stateLock)
+                _snapshot = _snapshot with { DetectedDevices = devices, UpdatedAt = DateTimeOffset.UtcNow };
+            if (added.Length > 0)
+            {
+                var device = devices.First(item => added.Contains(item.Id, StringComparer.OrdinalIgnoreCase));
+                PublishLog(LogLevel.Information, "DeviceDetected", $"USB storage hardware detected: {device.Name}.");
+                if (Snapshot.State == UsbState.Disabled)
+                    SetState(UsbState.Disabled, "USB storage detected. Click Enable USB to mount and scan it.", 0, GetUsbDrives());
+            }
+            else
+            {
+                Publish(new PipeEvent(SentinelProtocol.Version, EventType.Snapshot, Snapshot: Snapshot));
+            }
+        }
+        catch (Exception ex)
+        {
+            PublishLog(LogLevel.Warning, "HardwareInventoryFailed", ex.Message);
+        }
     }
 
     public void UpdateSettings(SentinelSettings settings)
@@ -382,7 +417,11 @@ public sealed class SentinelCoordinator(
                 status,
                 drives,
                 _settings,
-                DateTimeOffset.UtcNow);
+                DateTimeOffset.UtcNow,
+                PasswordConfigured: passwords.IsConfigured,
+                DefenderAvailable: defender.IsAvailable,
+                DefenderSignatureVersion: defender.SignatureVersion,
+                DetectedDevices: inventory.GetConnectedUsbStorageDevices());
         }
         Publish(new PipeEvent(SentinelProtocol.Version, EventType.StateChanged, Snapshot: Snapshot, Progress: progress));
     }

@@ -163,6 +163,20 @@ public sealed class PipeServer(SentinelCoordinator coordinator, PasswordReposito
                         SentinelProtocol.Version, EventType.Error, Message: changeError), token);
                 }
                 break;
+            case CommandType.ResetPassword:
+                if (passwords.TryReset(command.NewPassword, out var resetError))
+                {
+                    coordinator.RecordSecurityEvent("PasswordResetByAdministrator",
+                        "The USB enable password was reset by a local Windows administrator.");
+                    await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.PasswordConfigured,
+                        Message: "Security password reset successfully."), token);
+                }
+                else
+                {
+                    await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.Error,
+                        Message: resetError), token);
+                }
+                break;
             case CommandType.RemediateThreats:
                 if (!passwords.Verify(command.Password, out var remediationError))
                 {

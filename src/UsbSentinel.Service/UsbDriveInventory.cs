@@ -1,9 +1,53 @@
 using System.Management;
+using UsbSentinel.Contracts;
 
 namespace UsbSentinel.Service;
 
 public sealed class UsbDriveInventory
 {
+    public IReadOnlyList<UsbDeviceInfo> GetConnectedUsbStorageDevices()
+    {
+        var devices = new Dictionary<string, UsbDeviceInfo>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var diskSearcher = new ManagementObjectSearcher(
+                "SELECT DeviceID, Model, InterfaceType, PNPDeviceID, Status FROM Win32_DiskDrive");
+            foreach (ManagementObject disk in diskSearcher.Get())
+            {
+                using (disk)
+                {
+                    var interfaceType = disk["InterfaceType"]?.ToString();
+                    var pnpId = disk["PNPDeviceID"]?.ToString() ?? string.Empty;
+                    if (!string.Equals(interfaceType, "USB", StringComparison.OrdinalIgnoreCase) &&
+                        !pnpId.StartsWith("USBSTOR", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    var id = string.IsNullOrWhiteSpace(pnpId) ? disk["DeviceID"]?.ToString() ?? Guid.NewGuid().ToString() : pnpId;
+                    devices[id] = new UsbDeviceInfo(id, disk["Model"]?.ToString() ?? "USB storage device",
+                        disk["Status"]?.ToString() ?? "Connected");
+                }
+            }
+
+            using var pnpSearcher = new ManagementObjectSearcher(
+                "SELECT DeviceID, Name, Status, Service FROM Win32_PnPEntity WHERE Service = 'USBSTOR' OR Service = 'UASPStor'");
+            foreach (ManagementObject device in pnpSearcher.Get())
+            {
+                using (device)
+                {
+                    var id = device["DeviceID"]?.ToString();
+                    if (string.IsNullOrWhiteSpace(id))
+                        continue;
+                    devices[id] = new UsbDeviceInfo(id, device["Name"]?.ToString() ?? "USB storage device",
+                        device["Status"]?.ToString() ?? "Connected");
+                }
+            }
+        }
+        catch (ManagementException)
+        {
+        }
+
+        return devices.Values.OrderBy(device => device.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
     public IReadOnlyList<string> GetMountedUsbVolumes()
     {
         var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

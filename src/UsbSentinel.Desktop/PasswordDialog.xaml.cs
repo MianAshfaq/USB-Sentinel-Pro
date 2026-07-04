@@ -25,6 +25,13 @@ public partial class PasswordDialog : Window
 
     public string Password => PasswordInput.Password;
 
+    public void UseResetMode()
+    {
+        Heading.Text = "Reset security password";
+        Description.Text = "Create a replacement password with at least 8 characters, one letter, and one number.";
+        ConfirmButton.Content = "RESET PASSWORD";
+    }
+
     private void ConfirmClick(object sender, RoutedEventArgs e)
     {
         if (PasswordInput.Password.Length < 8 ||

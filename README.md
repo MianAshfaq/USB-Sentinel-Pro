@@ -41,6 +41,7 @@ Developed by **Muhammad Ashfaq**
 - Background Defender signature checks at startup and every six hours, with official Microsoft MMPC fallback.
 - WMI USB insert/remove monitoring with event deduplication and automatic fail-closed blocking.
 - USB bus-aware discovery for flash drives and mounted portable HDD volumes.
+- Hardware-level USBSTOR/UASP detection even before a blocked device receives a drive letter.
 - Password-protected Defender remediation and guarded exFAT/NTFS formatting tools.
 - Post-remediation and post-format prompts to rescan and enable only when clean.
 - Per-drive scan results and safer format identification with label, size, and filesystem.
@@ -50,6 +51,7 @@ Developed by **Muhammad Ashfaq**
 - Defender health/signature status, audit export, and Security History access.
 - SQLite settings and security-event storage under `%ProgramData%`.
 - Administrator-only versioned named-pipe communication.
+- Audited password recovery available only through the administrator-restricted service channel.
 - Desktop and Start Menu shortcuts with a branded icon.
 
 ## Projects
