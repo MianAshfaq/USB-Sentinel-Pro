@@ -1,4 +1,5 @@
 using System.Text.Json;
+using UsbSentinel.Service;
 using UsbSentinel.Contracts;
 using Xunit;
 
@@ -127,5 +128,15 @@ public sealed class ProtocolTests
 
         Assert.NotNull(deserialized);
         Assert.Equal("S-1-5-21-1000-1000-1000-1001", deserialized.UserSid);
+    }
+
+    [Theory]
+    [InlineData(0, "Successfully processed 1 files; Failed processing 0 files", true)]
+    [InlineData(0, "Successfully processed 0 files; Failed processing 1 files", false)]
+    [InlineData(0, "E:\\.: Access is denied.", false)]
+    [InlineData(1, "Successfully processed 1 files; Failed processing 0 files", false)]
+    public void AccessGrantParser_RejectsPartialOrDeniedIcaclsResults(int exitCode, string output, bool expected)
+    {
+        Assert.Equal(expected, SentinelCoordinator.AccessGrantSucceeded(exitCode, output));
     }
 }

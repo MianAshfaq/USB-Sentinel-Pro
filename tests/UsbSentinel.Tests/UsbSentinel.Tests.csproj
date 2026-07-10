@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\UsbSentinel.Contracts\UsbSentinel.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\UsbSentinel.Service\UsbSentinel.Service.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">

@@ -156,8 +156,23 @@ public sealed class SentinelCoordinator(
 
             if (!string.IsNullOrWhiteSpace(userSid))
             {
+                var accessGranted = true;
                 foreach (var drive in drives)
-                    await GrantRequesterAccessAsync(drive, userSid, token);
+                    accessGranted &= await GrantRequesterAccessAsync(drive, userSid, token);
+                if (!accessGranted)
+                {
+                    TryBlockStorage();
+                    SetState(UsbState.Failed, "USB scan passed, but Windows user access could not be granted. USB storage remains blocked.", 100, drives);
+                    PublishLog(LogLevel.Error, "AccessGrantRequired",
+                        "USB access was not enabled because Windows ACL repair failed.",
+                        result: "Access denied");
+                    return;
+                }
+
+                await RefreshUsbDeviceAccessAsync(token);
+                var refreshedDrives = await WaitForRemovableDrivesAsync(TimeSpan.FromSeconds(30), token);
+                if (refreshedDrives.Count > 0)
+                    drives = refreshedDrives;
             }
 
             var inaccessible = drives.Where(drive => !inventory.IsAccessibleDriveRoot(drive)).ToArray();
@@ -501,29 +516,77 @@ public sealed class SentinelCoordinator(
         policy.BlockStorage();
     }
 
-    private async Task GrantRequesterAccessAsync(string drive, string userSid, CancellationToken token)
+    private async Task<bool> GrantRequesterAccessAsync(string drive, string userSid, CancellationToken token)
     {
         try
         {
             _ = new System.Security.Principal.SecurityIdentifier(userSid);
 
             var root = UsbDriveInventory.NormalizeRoot(drive);
+            var aclTarget = root.TrimEnd('\\') + @"\.";
             var icacls = Path.Combine(Environment.SystemDirectory, "icacls.exe");
             var result = await DefenderScanner.RunProcessAsync(
                 icacls,
-                $"\"{root}\" /grant \"*{userSid}:(OI)(CI)M\" /C",
+                $"\"{aclTarget}\" /grant \"*{userSid}:(OI)(CI)M\" /C",
                 token);
-            PublishLog(result.ExitCode == 0 ? LogLevel.Security : LogLevel.Warning,
-                result.ExitCode == 0 ? "AccessGrantApplied" : "AccessGrantFailed",
-                result.ExitCode == 0
+            var succeeded = AccessGrantSucceeded(result.ExitCode, result.Output);
+            PublishLog(succeeded ? LogLevel.Security : LogLevel.Warning,
+                succeeded ? "AccessGrantApplied" : "AccessGrantFailed",
+                succeeded
                     ? $"Granted the requesting Windows user access to {root}."
                     : $"Could not grant requesting user access to {root}: {result.Output.Trim()}",
                 root,
-                result.ExitCode == 0 ? "Granted" : "Failed");
+                succeeded ? "Granted" : "Failed");
+            return succeeded;
         }
         catch (Exception ex)
         {
             PublishLog(LogLevel.Warning, "AccessGrantFailed", ex.Message, drive, "Failed");
+            return false;
         }
+    }
+
+    private async Task RefreshUsbDeviceAccessAsync(CancellationToken token)
+    {
+        var devices = inventory.GetConnectedUsbStorageDevices()
+            .Select(device => device.Id)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (devices.Length == 0)
+            return;
+
+        var pnputil = Path.Combine(Environment.SystemDirectory, "pnputil.exe");
+        foreach (var deviceId in devices)
+        {
+            token.ThrowIfCancellationRequested();
+            var result = await DefenderScanner.RunProcessAsync(
+                pnputil,
+                $"/restart-device \"{deviceId.Replace("\"", "\\\"")}\"",
+                token);
+            var succeeded = result.ExitCode == 0 &&
+                result.Output.Contains("Device restarted successfully", StringComparison.OrdinalIgnoreCase);
+            PublishLog(succeeded ? LogLevel.Security : LogLevel.Warning,
+                succeeded ? "UsbDeviceRestarted" : "UsbDeviceRestartFailed",
+                succeeded
+                    ? "USB storage device access state was refreshed."
+                    : $"Could not refresh USB storage device access state: {result.Output.Trim()}",
+                result: succeeded ? "Restarted" : "Failed");
+        }
+
+        await Task.Delay(TimeSpan.FromSeconds(5), token);
+    }
+
+    public static bool AccessGrantSucceeded(int exitCode, string output)
+    {
+        if (exitCode != 0)
+            return false;
+        if (output.Contains("Access is denied", StringComparison.OrdinalIgnoreCase) ||
+            output.Contains("The filename, directory name, or volume label syntax is incorrect", StringComparison.OrdinalIgnoreCase))
+            return false;
+        return !System.Text.RegularExpressions.Regex.IsMatch(
+            output,
+            @"Failed processing\s+[1-9]\d*\s+files",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     }
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.7 - 2026-07-10
+
+- Fixed malformed `icacls` access-grant command for drive roots such as `E:\`.
+- USB access now remains blocked if the post-scan Windows user ACL repair fails.
+- Refreshes the USB disk device after ACL repair so Explorer receives the new access state.
+- Added tests for detecting failed `icacls` output even when the process exit code is zero.
+
 ## 1.9.6 - 2026-07-10
 
 - Fixed clean USB scans where LocalSystem could scan the drive but the requesting Windows user still could not open it in Explorer.
