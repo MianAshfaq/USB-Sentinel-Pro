@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.3 - 2026-07-10
+
+- Fixed invalid `:\` scan targets created when Windows reports USB partitions with no mounted drive letter.
+- Added strict drive-root validation so Defender receives only valid roots such as `E:\`.
+
 ## 1.9.2 - 2026-07-10
 
 - Fixed mounted portable USB HDD/SSD volumes that Windows reports as fixed or UASP/SCSI media.

@@ -73,8 +73,7 @@ public sealed class UsbDriveInventory
                                 using (logicalDisk)
                                 {
                                     var deviceId = logicalDisk["DeviceID"]?.ToString();
-                                    if (!string.IsNullOrWhiteSpace(deviceId))
-                                        roots.Add(Path.GetPathRoot(deviceId + "\\") ?? deviceId + "\\");
+                                    TryAddDriveRoot(roots, deviceId);
                                 }
                             }
                         }
@@ -88,12 +87,12 @@ public sealed class UsbDriveInventory
         }
 
         foreach (var root in GetUsbVolumeRootsFromStorageApi())
-            roots.Add(root);
+            TryAddDriveRoot(roots, root);
 
         foreach (var drive in DriveInfo.GetDrives())
         {
             if (drive.DriveType == DriveType.Removable && drive.IsReady)
-                roots.Add(drive.RootDirectory.FullName);
+                TryAddDriveRoot(roots, drive.RootDirectory.FullName);
         }
 
         return roots.OrderBy(root => root, StringComparer.OrdinalIgnoreCase).ToArray();
@@ -181,9 +180,9 @@ public sealed class UsbDriveInventory
                         continue;
 
                     var driveLetter = partition["DriveLetter"]?.ToString();
-                    if (!string.IsNullOrWhiteSpace(driveLetter) && driveLetter.Length == 1)
+                    if (TryNormalizeDriveRoot(driveLetter, out var root))
                     {
-                        roots.Add(char.ToUpperInvariant(driveLetter[0]) + @":\");
+                        roots.Add(root);
                         continue;
                     }
 
@@ -191,9 +190,8 @@ public sealed class UsbDriveInventory
                     {
                         foreach (var accessPath in accessPaths)
                         {
-                            if (accessPath.Length >= 3 && accessPath[1] == ':' &&
-                                (accessPath[2] == '\\' || accessPath[2] == '/'))
-                                roots.Add(char.ToUpperInvariant(accessPath[0]) + @":\");
+                            if (TryNormalizeDriveRoot(accessPath, out root))
+                                roots.Add(root);
                         }
                     }
                 }
@@ -207,5 +205,33 @@ public sealed class UsbDriveInventory
         }
 
         return roots;
+    }
+
+    private static void TryAddDriveRoot(HashSet<string> roots, string? value)
+    {
+        if (TryNormalizeDriveRoot(value, out var root))
+            roots.Add(root);
+    }
+
+    private static bool TryNormalizeDriveRoot(string? value, out string root)
+    {
+        root = string.Empty;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var candidate = value.Trim();
+        if (candidate.Length >= 2 && char.IsAsciiLetter(candidate[0]) && candidate[1] == ':')
+        {
+            root = char.ToUpperInvariant(candidate[0]) + @":\";
+            return true;
+        }
+
+        if (candidate.Length == 1 && char.IsAsciiLetter(candidate[0]))
+        {
+            root = char.ToUpperInvariant(candidate[0]) + @":\";
+            return true;
+        }
+
+        return false;
     }
 }
