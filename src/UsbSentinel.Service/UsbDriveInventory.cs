@@ -101,6 +101,9 @@ public sealed class UsbDriveInventory
     public bool IsMountedUsbVolume(string root) =>
         GetMountedUsbVolumes().Contains(NormalizeRoot(root), StringComparer.OrdinalIgnoreCase);
 
+    public bool IsAccessibleDriveRoot(string root) =>
+        TryNormalizeDriveRoot(root, out var normalized) && IsUsableDriveRoot(normalized);
+
     public static string NormalizeRoot(string root)
     {
         var pathRoot = Path.GetPathRoot(root);

@@ -87,6 +87,17 @@ public sealed class SentinelCoordinator(
                 return;
             }
 
+            var inaccessibleBeforeScan = drives.Where(drive => !inventory.IsAccessibleDriveRoot(drive)).ToArray();
+            if (inaccessibleBeforeScan.Length > 0)
+            {
+                TryBlockStorage();
+                SetState(UsbState.Failed, "Windows mounted the USB drive letter but denied filesystem access. USB storage remains blocked.", 0, drives);
+                PublishLog(LogLevel.Error, "AccessVerificationFailed",
+                    $"USB drive letters are not readable before scan: {string.Join(", ", inaccessibleBeforeScan)}.",
+                    result: "Access denied");
+                return;
+            }
+
             SetState(UsbState.Scanning, "Updating Defender signatures.", 5, drives);
             var signaturesUpdated = true;
             if (defender.SignaturesRecentlyUpdated)
@@ -143,12 +154,11 @@ public sealed class SentinelCoordinator(
                 PublishLog(LogLevel.Security, "ScanClean", $"{drive} passed Microsoft Defender scan.", drive, "Clean");
             }
 
-            var accessibleDrives = GetUsbDrives();
-            var inaccessible = drives.Except(accessibleDrives, StringComparer.OrdinalIgnoreCase).ToArray();
+            var inaccessible = drives.Where(drive => !inventory.IsAccessibleDriveRoot(drive)).ToArray();
             if (inaccessible.Length > 0)
             {
                 TryBlockStorage();
-                SetState(UsbState.Failed, "Windows still denies access to one or more USB volumes. USB storage remains blocked.", 100, accessibleDrives);
+                SetState(UsbState.Failed, "Windows still denies access to one or more USB volumes. USB storage remains blocked.", 100, GetUsbDrives());
                 PublishLog(LogLevel.Error, "AccessVerificationFailed",
                     $"Windows did not expose accessible filesystem roots after scan: {string.Join(", ", inaccessible)}.",
                     result: "Access denied");
@@ -322,7 +332,23 @@ public sealed class SentinelCoordinator(
     public void AuditProtectionState()
     {
         var state = Snapshot.State;
-        if (state is UsbState.Enabled or UsbState.Enabling or UsbState.Scanning or UsbState.WaitingForDevice)
+        if (state is UsbState.Enabled)
+        {
+            var inaccessible = Snapshot.ConnectedDrives
+                .Where(drive => !inventory.IsAccessibleDriveRoot(drive))
+                .ToArray();
+            if (inaccessible.Length == 0)
+                return;
+
+            TryBlockStorage();
+            SetState(UsbState.Failed, "Windows denied access after USB was enabled. USB storage was blocked again.", 0, GetUsbDrives());
+            PublishLog(LogLevel.Error, "EnabledAccessLost",
+                $"Enabled USB volume became inaccessible: {string.Join(", ", inaccessible)}.",
+                result: "Access denied");
+            return;
+        }
+
+        if (state is UsbState.Enabling or UsbState.Scanning or UsbState.WaitingForDevice)
             return;
         if (policy.IsStorageBlocked())
             return;

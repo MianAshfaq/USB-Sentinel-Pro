@@ -27,6 +27,7 @@ public sealed class UsbPolicyController
     {
         SetDword(UsbStorPath, "Start", 3);
         ClearRemovableStorageDenyPolicy();
+        RemoveStaleMountPoints();
         EnableAutomount();
         BroadcastPolicyChange();
         RescanDevices();
@@ -92,15 +93,25 @@ public sealed class UsbPolicyController
 
     private static void EnableAutomount()
     {
+        RunMountvol("/E", 5000);
+    }
+
+    private static void RemoveStaleMountPoints()
+    {
+        RunMountvol("/R", 10000);
+    }
+
+    private static void RunMountvol(string arguments, int timeoutMilliseconds)
+    {
         var psi = new System.Diagnostics.ProcessStartInfo
         {
             FileName = Path.Combine(Environment.SystemDirectory, "mountvol.exe"),
-            Arguments = "/E",
+            Arguments = arguments,
             UseShellExecute = false,
             CreateNoWindow = true
         };
         using var process = System.Diagnostics.Process.Start(psi);
-        process?.WaitForExit(5000);
+        process?.WaitForExit(timeoutMilliseconds);
     }
 
     private static class NativeMethods

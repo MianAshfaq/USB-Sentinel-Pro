@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.5 - 2026-07-10
+
+- Added strict drive-readiness checks before scanning and before showing USB access enabled.
+- Added enabled-state access auditing every 10 seconds so stale access states are corrected quickly.
+- Cleaned stale Windows mount points during controlled USB enable before automount and device rescan.
+
 ## 1.9.4 - 2026-07-10
 
 - Fixed clean scans reporting access enabled while Windows still denied Explorer access.
