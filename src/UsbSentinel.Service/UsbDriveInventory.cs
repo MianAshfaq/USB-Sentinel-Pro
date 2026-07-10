@@ -209,7 +209,7 @@ public sealed class UsbDriveInventory
 
     private static void TryAddDriveRoot(HashSet<string> roots, string? value)
     {
-        if (TryNormalizeDriveRoot(value, out var root))
+        if (TryNormalizeDriveRoot(value, out var root) && IsUsableDriveRoot(root))
             roots.Add(root);
     }
 
@@ -233,5 +233,25 @@ public sealed class UsbDriveInventory
         }
 
         return false;
+    }
+
+    private static bool IsUsableDriveRoot(string root)
+    {
+        try
+        {
+            var drive = new DriveInfo(root);
+            if (!drive.IsReady || string.IsNullOrWhiteSpace(drive.DriveFormat))
+                return false;
+            _ = Directory.EnumerateFileSystemEntries(root).Take(1).ToArray();
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 }

@@ -26,7 +26,8 @@ public sealed class UsbPolicyController
     public void AllowStorageForScan()
     {
         SetDword(UsbStorPath, "Start", 3);
-        SetDword(RemovableStoragePath, "Deny_All", 0);
+        ClearRemovableStorageDenyPolicy();
+        EnableAutomount();
         BroadcastPolicyChange();
         RescanDevices();
     }
@@ -48,6 +49,27 @@ public sealed class UsbPolicyController
         key.SetValue(name, value, RegistryValueKind.DWord);
     }
 
+    private static void ClearRemovableStorageDenyPolicy()
+    {
+        using var key = Registry.LocalMachine.CreateSubKey(RemovableStoragePath, writable: true)
+            ?? throw new InvalidOperationException($"Unable to open HKLM\\{RemovableStoragePath}.");
+        DeleteDenyValues(key);
+    }
+
+    private static void DeleteDenyValues(RegistryKey key)
+    {
+        foreach (var valueName in key.GetValueNames()
+                     .Where(name => name.StartsWith("Deny_", StringComparison.OrdinalIgnoreCase)))
+            key.DeleteValue(valueName, throwOnMissingValue: false);
+
+        foreach (var subKeyName in key.GetSubKeyNames())
+        {
+            using var subKey = key.OpenSubKey(subKeyName, writable: true);
+            if (subKey is not null)
+                DeleteDenyValues(subKey);
+        }
+    }
+
     private static void BroadcastPolicyChange()
     {
         _ = NativeMethods.SendMessageTimeout(
@@ -66,6 +88,19 @@ public sealed class UsbPolicyController
         };
         using var process = System.Diagnostics.Process.Start(psi);
         process?.WaitForExit(15000);
+    }
+
+    private static void EnableAutomount()
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = Path.Combine(Environment.SystemDirectory, "mountvol.exe"),
+            Arguments = "/E",
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        using var process = System.Diagnostics.Process.Start(psi);
+        process?.WaitForExit(5000);
     }
 
     private static class NativeMethods

@@ -143,6 +143,18 @@ public sealed class SentinelCoordinator(
                 PublishLog(LogLevel.Security, "ScanClean", $"{drive} passed Microsoft Defender scan.", drive, "Clean");
             }
 
+            var accessibleDrives = GetUsbDrives();
+            var inaccessible = drives.Except(accessibleDrives, StringComparer.OrdinalIgnoreCase).ToArray();
+            if (inaccessible.Length > 0)
+            {
+                TryBlockStorage();
+                SetState(UsbState.Failed, "Windows still denies access to one or more USB volumes. USB storage remains blocked.", 100, accessibleDrives);
+                PublishLog(LogLevel.Error, "AccessVerificationFailed",
+                    $"Windows did not expose accessible filesystem roots after scan: {string.Join(", ", inaccessible)}.",
+                    result: "Access denied");
+                return;
+            }
+
             SetState(UsbState.Enabled, "Defender verification passed. USB access enabled.", 100, drives);
             PublishLog(LogLevel.Security, "AccessGranted", "All detected USB storage passed the configured Defender verification.", result: "Verified");
         }

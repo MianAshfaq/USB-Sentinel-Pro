@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.4 - 2026-07-10
+
+- Fixed clean scans reporting access enabled while Windows still denied Explorer access.
+- Clearing USB access now removes removable-storage deny policy values instead of writing disabled deny values.
+- Re-enabled Windows automount during controlled USB enable.
+- Added final filesystem-access verification before the dashboard can show USB access enabled.
+
 ## 1.9.3 - 2026-07-10
 
 - Fixed invalid `:\` scan targets created when Windows reports USB partitions with no mounted drive letter.
