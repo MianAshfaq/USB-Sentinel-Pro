@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.8 - 2026-07-11
+
+- Fixed repeated scan/disable loop caused by Windows remove/insert events during the service's own USB device refresh.
+- Suppresses planned USB hardware and volume events while access is being refreshed after a clean scan.
+- Keeps approved drive state stable after the USB disk restart required for Explorer access.
+
 ## 1.9.7 - 2026-07-10
 
 - Fixed malformed `icacls` access-grant command for drive roots such as `E:\`.

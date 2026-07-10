@@ -17,6 +17,7 @@ public sealed class SentinelCoordinator(
     private HashSet<string> _knownUsbVolumes = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> _knownUsbDevices = new(StringComparer.OrdinalIgnoreCase);
     private DateTimeOffset _suppressVolumeEventsUntil;
+    private DateTimeOffset _suppressHardwareEventsUntil;
     private CancellationTokenSource? _operationCancellation;
     private SentinelSettings _settings = settingsRepository.Load();
     private ServiceSnapshot _snapshot = new(
@@ -234,11 +235,18 @@ public sealed class SentinelCoordinator(
         bool suppressed;
         lock (_deviceLock)
         {
-            removed = _knownUsbVolumes.Except(drives, StringComparer.OrdinalIgnoreCase).Any();
-            _knownUsbVolumes = drives.ToHashSet(StringComparer.OrdinalIgnoreCase);
             suppressed = DateTimeOffset.UtcNow <= _suppressVolumeEventsUntil;
+            removed = _knownUsbVolumes.Except(drives, StringComparer.OrdinalIgnoreCase).Any();
+            if (!suppressed)
+                _knownUsbVolumes = drives.ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
-        if (!removed || suppressed || !_settings.AutoDisableOnDisconnect)
+        if (suppressed)
+        {
+            PublishLog(LogLevel.Information, "DeviceEventSuppressed",
+                "Ignoring temporary USB remove event during controlled device refresh.");
+            return;
+        }
+        if (!removed || !_settings.AutoDisableOnDisconnect)
             return;
         _operationCancellation?.Cancel();
         TryBlockStorage();
@@ -250,13 +258,21 @@ public sealed class SentinelCoordinator(
     {
         var drives = GetUsbDrives();
         string[] added;
+        bool suppressed;
         lock (_deviceLock)
         {
+            suppressed = DateTimeOffset.UtcNow <= _suppressVolumeEventsUntil;
             added = drives.Except(_knownUsbVolumes, StringComparer.OrdinalIgnoreCase).ToArray();
             _knownUsbVolumes = drives.ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
         if (added.Length == 0)
             return;
+        if (suppressed)
+        {
+            PublishLog(LogLevel.Information, "DeviceEventSuppressed",
+                "USB volume returned after controlled device refresh.", added[0]);
+            return;
+        }
         PublishLog(LogLevel.Information, "VolumeMounted", "USB storage volume mounted for inspection.", added[0]);
         var current = Snapshot;
         if (current.State == UsbState.Disabled)
@@ -270,13 +286,20 @@ public sealed class SentinelCoordinator(
             var devices = inventory.GetConnectedUsbStorageDevices();
             var ids = devices.Select(device => device.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
             string[] added;
+            bool suppressed;
             lock (_deviceLock)
             {
+                suppressed = DateTimeOffset.UtcNow <= _suppressHardwareEventsUntil;
                 added = ids.Except(_knownUsbDevices, StringComparer.OrdinalIgnoreCase).ToArray();
                 _knownUsbDevices = ids;
             }
             lock (_stateLock)
                 _snapshot = _snapshot with { DetectedDevices = devices, UpdatedAt = DateTimeOffset.UtcNow };
+            if (suppressed)
+            {
+                Publish(new PipeEvent(SentinelProtocol.Version, EventType.Snapshot, Snapshot: Snapshot));
+                return;
+            }
             if (added.Length > 0)
             {
                 var device = devices.First(item => added.Contains(item.Id, StringComparer.OrdinalIgnoreCase));
@@ -556,6 +579,7 @@ public sealed class SentinelCoordinator(
         if (devices.Length == 0)
             return;
 
+        SuppressDeviceEvents(TimeSpan.FromSeconds(75));
         var pnputil = Path.Combine(Environment.SystemDirectory, "pnputil.exe");
         foreach (var deviceId in devices)
         {
@@ -575,6 +599,16 @@ public sealed class SentinelCoordinator(
         }
 
         await Task.Delay(TimeSpan.FromSeconds(5), token);
+    }
+
+    private void SuppressDeviceEvents(TimeSpan duration)
+    {
+        lock (_deviceLock)
+        {
+            var until = DateTimeOffset.UtcNow.Add(duration);
+            _suppressVolumeEventsUntil = until;
+            _suppressHardwareEventsUntil = until;
+        }
     }
 
     public static bool AccessGrantSucceeded(int exitCode, string output)
