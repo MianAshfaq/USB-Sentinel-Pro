@@ -56,8 +56,18 @@ public sealed class SentinelCoordinator(
     {
         if (!await _operationLock.WaitAsync(0, cancellationToken))
         {
-            PublishLog(LogLevel.Warning, "CommandRejected", "Another USB operation is already running.");
-            return;
+            if (Snapshot.State is UsbState.Enabling or UsbState.Scanning or UsbState.WaitingForDevice)
+            {
+                PublishLog(LogLevel.Warning, "CommandRejected", "Another USB operation is already running.");
+                return;
+            }
+
+            PublishLog(LogLevel.Information, "CommandQueued", "Waiting for background security maintenance to finish.");
+            if (!await _operationLock.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken))
+            {
+                PublishLog(LogLevel.Warning, "CommandRejected", "USB enable could not start because maintenance is still running. Please try again.");
+                return;
+            }
         }
 
         _operationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.1 - 2026-07-10
+
+- Fixed USB enable being rejected while background Defender maintenance is running.
+- Disabled USB action buttons while an enable, wait, scan, format, or remediation operation is active.
+- Added a number-calculation recovery check before administrator password reset.
+- Cleaned the password dialog rendering so password fields display correctly.
+
 ## 1.9.0 - 2026-07-04
 
 - Added hardware-level USB storage discovery before drive letters are mounted.

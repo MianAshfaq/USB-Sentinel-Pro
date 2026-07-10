@@ -36,7 +36,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public MainViewModel(Dispatcher dispatcher)
     {
         _dispatcher = dispatcher;
-        EnableCommand = new RelayCommand(EnableUsbAsync, () => _connected);
+        EnableCommand = new RelayCommand(EnableUsbAsync, () => _connected && !UsbOperationBusy);
         DisableCommand = new RelayCommand(() => SendAsync(CommandType.DisableUsb), () => _connected);
         SaveSettingsCommand = new RelayCommand(SaveSettingsAsync, () => _connected);
         TestVoiceCommand = new RelayCommand(TestVoiceAsync);
@@ -45,8 +45,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ExportLogsCommand = new RelayCommand(ExportLogsAsync);
         RefreshCommand = new RelayCommand(RefreshAsync, () => _connected);
         OpenSecurityCommand = new RelayCommand(OpenWindowsSecurityAsync);
-        RemediateThreatsCommand = new RelayCommand(RemediateThreatsAsync, () => _connected && PasswordConfigured);
-        FormatUsbCommand = new RelayCommand(FormatUsbAsync, () => _connected && (_snapshot?.ConnectedDrives.Count ?? 0) > 0);
+        RemediateThreatsCommand = new RelayCommand(RemediateThreatsAsync, () => _connected && PasswordConfigured && !UsbOperationBusy);
+        FormatUsbCommand = new RelayCommand(FormatUsbAsync, () => _connected && !UsbOperationBusy && (_snapshot?.ConnectedDrives.Count ?? 0) > 0);
         OpenFacebookCommand = new RelayCommand(() => OpenUrlAsync("https://fb.com/MianAshfaq012"));
         OpenGitHubCommand = new RelayCommand(() => OpenUrlAsync("https://github.com/MianAshfaq"));
         OpenWebsiteCommand = new RelayCommand(() => OpenUrlAsync("https://cyberoly.com"));
@@ -91,6 +91,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public event Action<string, string, bool>? TrayNotificationRequested;
 
     public UsbState State => _snapshot?.State ?? UsbState.Disabled;
+    private bool UsbOperationBusy => State is UsbState.Enabling or UsbState.Scanning or UsbState.WaitingForDevice;
     public string StatusText => _snapshot?.StatusText ?? "Connecting to USB Sentinel service...";
     public string ProgressText => State == UsbState.Scanning ? $"{_snapshot?.ScanProgress ?? 0}% SCANNED" : State.ToString().ToUpperInvariant();
     public string ConnectedDrivesText => _snapshot?.ConnectedDrives.Count > 0
