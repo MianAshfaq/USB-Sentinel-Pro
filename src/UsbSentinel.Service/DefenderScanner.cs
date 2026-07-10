@@ -7,6 +7,13 @@ namespace UsbSentinel.Service;
 
 public sealed class DefenderScanner
 {
+    private static readonly string[] HighRiskExtensions =
+    [
+        ".exe", ".dll", ".scr", ".msi", ".cmd", ".bat", ".ps1", ".vbs", ".vbe",
+        ".js", ".jse", ".wsf", ".hta", ".lnk", ".com", ".pif", ".jar"
+    ];
+    private const long FullScanSizeLimitBytes = 64L * 1024 * 1024 * 1024;
+    private const int FastScanFileLimit = 250;
     private readonly string? _mpCmdRun = ResolveMpCmdRun();
     private DateTimeOffset? _lastSuccessfulSignatureUpdate;
 
@@ -81,8 +88,11 @@ public sealed class DefenderScanner
         if (_mpCmdRun is null)
             return new DefenderScanResult(root, false, false, false, false, -1, "Microsoft Defender is unavailable.");
         progress(10);
-        log($"Starting Defender custom scan of {root}");
-        var result = await RunAsync("-Scan -ScanType 3 -File", root, cancellationToken);
+        var plan = BuildScanPlan(root);
+        log(plan.Description);
+        var result = plan.FastGate
+            ? await RunFastGateScanAsync(root, plan.Targets, log, progress, cancellationToken)
+            : await RunAsync("-Scan -ScanType 3 -File", root, cancellationToken);
         progress(90);
 
         var output = result.Output;
@@ -98,9 +108,114 @@ public sealed class DefenderScanner
         var summary = !succeeded ? "Defender scan failed."
             : threatFound && remediationSucceeded ? "Threat detected and Defender remediation completed."
             : threatFound ? "Threat detected; remediation requires attention."
+            : plan.FastGate ? "Fast Defender safety scan passed. Full scan is recommended for large storage."
             : "No threats detected.";
 
         return new DefenderScanResult(root, succeeded, threatFound, threatFound, remediationSucceeded, result.ExitCode, summary);
+    }
+
+    private async Task<(int ExitCode, string Output)> RunFastGateScanAsync(
+        string root,
+        IReadOnlyList<string> targets,
+        Action<string> log,
+        Action<int> progress,
+        CancellationToken cancellationToken)
+    {
+        log("Running Microsoft Defender quick scan before USB access.");
+        var quickScan = await RunAsync("-Scan -ScanType 1", null, cancellationToken);
+        if (quickScan.ExitCode is not 0 and not 2)
+            return quickScan;
+        if (quickScan.ExitCode == 2)
+            return quickScan;
+
+        var output = new StringBuilder(quickScan.Output);
+        var index = 0;
+        foreach (var target in targets)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            index++;
+            progress(10 + (index * 75 / Math.Max(targets.Count, 1)));
+            log($"Fast gate scan target {index}/{targets.Count}: {target}");
+            var result = await RunAsync("-Scan -ScanType 3 -File", target, cancellationToken);
+            output.AppendLine(result.Output);
+            if (result.ExitCode is not 0)
+                return (result.ExitCode, output.ToString());
+        }
+
+        if (targets.Count == 0)
+            log($"No high-risk launch files were found on {root}; quick scan result is being used.");
+        return (0, output.ToString());
+    }
+
+    private static ScanPlan BuildScanPlan(string root)
+    {
+        try
+        {
+            var drive = new DriveInfo(root);
+            if (drive.IsReady && drive.TotalSize > FullScanSizeLimitBytes)
+            {
+                var targets = EnumerateFastGateTargets(root).ToArray();
+                return new ScanPlan(
+                    true,
+                    targets,
+                    $"Large USB storage detected ({FormatBytes(drive.TotalSize)}). Starting fast Defender safety scan of high-risk launch files; full scan remains recommended.");
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+
+        return new ScanPlan(false, Array.Empty<string>(), $"Starting Defender full custom scan of {root}");
+    }
+
+    private static IEnumerable<string> EnumerateFastGateTargets(string root)
+    {
+        foreach (var fileName in new[] { "autorun.inf", "desktop.ini" })
+        {
+            var path = Path.Combine(root, fileName);
+            if (File.Exists(path))
+                yield return path;
+        }
+
+        var options = new EnumerationOptions
+        {
+            IgnoreInaccessible = true,
+            RecurseSubdirectories = true,
+            AttributesToSkip = FileAttributes.System | FileAttributes.Temporary
+        };
+        var count = 0;
+        IEnumerable<string> files;
+        try
+        {
+            files = Directory.EnumerateFiles(root, "*", options);
+        }
+        catch (IOException)
+        {
+            yield break;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            yield break;
+        }
+
+        foreach (var file in files)
+        {
+            if (!HighRiskExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
+                continue;
+            yield return file;
+            count++;
+            if (count >= FastScanFileLimit)
+                yield break;
+        }
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        var gib = bytes / 1024d / 1024d / 1024d;
+        return $"{gib:0.0} GB";
     }
 
     public async Task<bool> RemediateThreatsAsync(Action<string> log, CancellationToken cancellationToken)
@@ -169,4 +284,6 @@ public sealed class DefenderScanner
             : null;
         return latest;
     }
+
+    private sealed record ScanPlan(bool FastGate, IReadOnlyList<string> Targets, string Description);
 }

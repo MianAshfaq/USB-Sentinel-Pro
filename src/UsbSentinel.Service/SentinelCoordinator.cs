@@ -143,8 +143,8 @@ public sealed class SentinelCoordinator(
                 PublishLog(LogLevel.Security, "ScanClean", $"{drive} passed Microsoft Defender scan.", drive, "Clean");
             }
 
-            SetState(UsbState.Enabled, "USB is clean. Access enabled.", 100, drives);
-            PublishLog(LogLevel.Security, "AccessGranted", "All detected removable drives are clean.", result: "Clean");
+            SetState(UsbState.Enabled, "Defender verification passed. USB access enabled.", 100, drives);
+            PublishLog(LogLevel.Security, "AccessGranted", "All detected USB storage passed the configured Defender verification.", result: "Verified");
         }
         catch (OperationCanceledException)
         {

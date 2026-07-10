@@ -42,6 +42,8 @@ Developed by **Muhammad Ashfaq**
 - WMI USB insert/remove monitoring with event deduplication and automatic fail-closed blocking.
 - USB bus-aware discovery for flash drives and mounted portable HDD volumes.
 - Hardware-level USBSTOR/UASP detection even before a blocked device receives a drive letter.
+- Windows storage-bus detection for portable HDD/SSD devices that appear as fixed media.
+- Adaptive Defender verification: small USB media receive a full custom scan, while large USB disks use a faster safety gate for high-risk launch files and should still receive a full scan when time allows.
 - Password-protected Defender remediation and guarded exFAT/NTFS formatting tools.
 - Post-remediation and post-format prompts to rescan and enable only when clean.
 - Per-drive scan results and safer format identification with label, size, and filesystem.

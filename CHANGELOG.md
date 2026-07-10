@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.9.2 - 2026-07-10
+
+- Fixed mounted portable USB HDD/SSD volumes that Windows reports as fixed or UASP/SCSI media.
+- Added Windows storage-bus detection so USB-bus disks are scanned even when they are not marked removable.
+- Added adaptive Defender scanning: small USB media use a full custom scan, large USB storage uses a faster safety gate for high-risk launch files.
+- Updated access wording to distinguish configured Defender verification from a full scan of every byte on very large drives.
+
 ## 1.9.1 - 2026-07-10
 
 - Fixed USB enable being rejected while background Defender maintenance is running.

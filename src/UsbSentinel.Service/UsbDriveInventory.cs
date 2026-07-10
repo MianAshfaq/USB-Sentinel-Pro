@@ -5,9 +5,12 @@ namespace UsbSentinel.Service;
 
 public sealed class UsbDriveInventory
 {
+    private const int UsbBusType = 7;
+
     public IReadOnlyList<UsbDeviceInfo> GetConnectedUsbStorageDevices()
     {
         var devices = new Dictionary<string, UsbDeviceInfo>(StringComparer.OrdinalIgnoreCase);
+        var usbPhysicalDrives = GetUsbPhysicalDriveIds();
         try
         {
             using var diskSearcher = new ManagementObjectSearcher(
@@ -16,11 +19,9 @@ public sealed class UsbDriveInventory
             {
                 using (disk)
                 {
-                    var interfaceType = disk["InterfaceType"]?.ToString();
-                    var pnpId = disk["PNPDeviceID"]?.ToString() ?? string.Empty;
-                    if (!string.Equals(interfaceType, "USB", StringComparison.OrdinalIgnoreCase) &&
-                        !pnpId.StartsWith("USBSTOR", StringComparison.OrdinalIgnoreCase))
+                    if (!IsUsbBackedDisk(disk, usbPhysicalDrives))
                         continue;
+                    var pnpId = disk["PNPDeviceID"]?.ToString() ?? string.Empty;
                     var id = string.IsNullOrWhiteSpace(pnpId) ? disk["DeviceID"]?.ToString() ?? Guid.NewGuid().ToString() : pnpId;
                     devices[id] = new UsbDeviceInfo(id, disk["Model"]?.ToString() ?? "USB storage device",
                         disk["Status"]?.ToString() ?? "Connected");
@@ -51,6 +52,7 @@ public sealed class UsbDriveInventory
     public IReadOnlyList<string> GetMountedUsbVolumes()
     {
         var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var usbPhysicalDrives = GetUsbPhysicalDriveIds();
         try
         {
             using var searcher = new ManagementObjectSearcher(
@@ -59,10 +61,7 @@ public sealed class UsbDriveInventory
             {
                 using (disk)
                 {
-                    var interfaceType = disk["InterfaceType"]?.ToString();
-                    var pnpDeviceId = disk["PNPDeviceID"]?.ToString();
-                    if (!string.Equals(interfaceType, "USB", StringComparison.OrdinalIgnoreCase) &&
-                        !(pnpDeviceId?.StartsWith("USBSTOR", StringComparison.OrdinalIgnoreCase) ?? false))
+                    if (!IsUsbBackedDisk(disk, usbPhysicalDrives))
                         continue;
 
                     foreach (ManagementObject partition in disk.GetRelated("Win32_DiskPartition"))
@@ -88,6 +87,9 @@ public sealed class UsbDriveInventory
             // DriveInfo fallback still covers standard removable media.
         }
 
+        foreach (var root in GetUsbVolumeRootsFromStorageApi())
+            roots.Add(root);
+
         foreach (var drive in DriveInfo.GetDrives())
         {
             if (drive.DriveType == DriveType.Removable && drive.IsReady)
@@ -106,5 +108,104 @@ public sealed class UsbDriveInventory
         if (string.IsNullOrWhiteSpace(pathRoot) || pathRoot.Length < 2 || pathRoot[1] != ':')
             throw new ArgumentException("A valid drive root is required.", nameof(root));
         return char.ToUpperInvariant(pathRoot[0]) + @":\";
+    }
+
+    private static bool IsUsbBackedDisk(ManagementBaseObject disk, IReadOnlySet<string> usbPhysicalDrives)
+    {
+        var deviceId = disk["DeviceID"]?.ToString();
+        var interfaceType = disk["InterfaceType"]?.ToString();
+        var pnpDeviceId = disk["PNPDeviceID"]?.ToString() ?? string.Empty;
+        return string.Equals(interfaceType, "USB", StringComparison.OrdinalIgnoreCase) ||
+               pnpDeviceId.StartsWith("USBSTOR", StringComparison.OrdinalIgnoreCase) ||
+               pnpDeviceId.Contains("USB", StringComparison.OrdinalIgnoreCase) ||
+               (!string.IsNullOrWhiteSpace(deviceId) && usbPhysicalDrives.Contains(deviceId));
+    }
+
+    private static IReadOnlySet<string> GetUsbPhysicalDriveIds()
+    {
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                @"root\Microsoft\Windows\Storage",
+                $"SELECT Number, BusType FROM MSFT_Disk WHERE BusType = {UsbBusType}");
+            foreach (ManagementObject disk in searcher.Get())
+            {
+                using (disk)
+                {
+                    if (uint.TryParse(disk["Number"]?.ToString(), out var number))
+                        ids.Add($@"\\.\PHYSICALDRIVE{number}");
+                }
+            }
+        }
+        catch (ManagementException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+
+        return ids;
+    }
+
+    private static IEnumerable<string> GetUsbVolumeRootsFromStorageApi()
+    {
+        var roots = new List<string>();
+        var diskNumbers = new HashSet<uint>();
+        try
+        {
+            using var diskSearcher = new ManagementObjectSearcher(
+                @"root\Microsoft\Windows\Storage",
+                $"SELECT Number, BusType FROM MSFT_Disk WHERE BusType = {UsbBusType}");
+            foreach (ManagementObject disk in diskSearcher.Get())
+            {
+                using (disk)
+                {
+                    if (uint.TryParse(disk["Number"]?.ToString(), out var number))
+                        diskNumbers.Add(number);
+                }
+            }
+
+            if (diskNumbers.Count == 0)
+                return roots;
+
+            using var partitionSearcher = new ManagementObjectSearcher(
+                @"root\Microsoft\Windows\Storage",
+                "SELECT DiskNumber, DriveLetter, AccessPaths FROM MSFT_Partition");
+            foreach (ManagementObject partition in partitionSearcher.Get())
+            {
+                using (partition)
+                {
+                    if (!uint.TryParse(partition["DiskNumber"]?.ToString(), out var diskNumber) ||
+                        !diskNumbers.Contains(diskNumber))
+                        continue;
+
+                    var driveLetter = partition["DriveLetter"]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(driveLetter) && driveLetter.Length == 1)
+                    {
+                        roots.Add(char.ToUpperInvariant(driveLetter[0]) + @":\");
+                        continue;
+                    }
+
+                    if (partition["AccessPaths"] is string[] accessPaths)
+                    {
+                        foreach (var accessPath in accessPaths)
+                        {
+                            if (accessPath.Length >= 3 && accessPath[1] == ':' &&
+                                (accessPath[2] == '\\' || accessPath[2] == '/'))
+                                roots.Add(char.ToUpperInvariant(accessPath[0]) + @":\");
+                        }
+                    }
+                }
+            }
+        }
+        catch (ManagementException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+
+        return roots;
     }
 }
