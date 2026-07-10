@@ -52,7 +52,7 @@ public sealed class SentinelCoordinator(
         PublishLog(LogLevel.Security, "ServiceStarted", "Service started with USB storage blocked.");
     }
 
-    public async Task EnableAsync(CancellationToken cancellationToken)
+    public async Task EnableAsync(string? userSid, CancellationToken cancellationToken)
     {
         if (!await _operationLock.WaitAsync(0, cancellationToken))
         {
@@ -152,6 +152,12 @@ public sealed class SentinelCoordinator(
                 }
 
                 PublishLog(LogLevel.Security, "ScanClean", $"{drive} passed Microsoft Defender scan.", drive, "Clean");
+            }
+
+            if (!string.IsNullOrWhiteSpace(userSid))
+            {
+                foreach (var drive in drives)
+                    await GrantRequesterAccessAsync(drive, userSid, token);
             }
 
             var inaccessible = drives.Where(drive => !inventory.IsAccessibleDriveRoot(drive)).ToArray();
@@ -493,5 +499,31 @@ public sealed class SentinelCoordinator(
         lock (_deviceLock)
             _suppressVolumeEventsUntil = DateTimeOffset.UtcNow.AddSeconds(4);
         policy.BlockStorage();
+    }
+
+    private async Task GrantRequesterAccessAsync(string drive, string userSid, CancellationToken token)
+    {
+        try
+        {
+            _ = new System.Security.Principal.SecurityIdentifier(userSid);
+
+            var root = UsbDriveInventory.NormalizeRoot(drive);
+            var icacls = Path.Combine(Environment.SystemDirectory, "icacls.exe");
+            var result = await DefenderScanner.RunProcessAsync(
+                icacls,
+                $"\"{root}\" /grant \"*{userSid}:(OI)(CI)M\" /C",
+                token);
+            PublishLog(result.ExitCode == 0 ? LogLevel.Security : LogLevel.Warning,
+                result.ExitCode == 0 ? "AccessGrantApplied" : "AccessGrantFailed",
+                result.ExitCode == 0
+                    ? $"Granted the requesting Windows user access to {root}."
+                    : $"Could not grant requesting user access to {root}: {result.Output.Trim()}",
+                root,
+                result.ExitCode == 0 ? "Granted" : "Failed");
+        }
+        catch (Exception ex)
+        {
+            PublishLog(LogLevel.Warning, "AccessGrantFailed", ex.Message, drive, "Failed");
+        }
     }
 }

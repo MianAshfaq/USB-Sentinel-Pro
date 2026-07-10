@@ -122,7 +122,7 @@ public sealed class PipeServer(SentinelCoordinator coordinator, PasswordReposito
                         SentinelProtocol.Version, EventType.Error, Message: authenticationError), token);
                     break;
                 }
-                _ = coordinator.EnableAsync(token);
+                _ = coordinator.EnableAsync(command.UserSid, token);
                 break;
             case CommandType.DisableUsb:
                 await coordinator.DisableAsync(token);

@@ -112,4 +112,20 @@ public sealed class ProtocolTests
         Assert.Null(deserialized.Password);
         Assert.Equal("ReplacementPassword9", deserialized.NewPassword);
     }
+
+    [Fact]
+    public void EnableCommand_CarriesRequesterSidForAccessGrant()
+    {
+        var command = new PipeCommand(
+            SentinelProtocol.Version,
+            CommandType.EnableUsb,
+            Password: "TestPassword9",
+            UserSid: "S-1-5-21-1000-1000-1000-1001");
+
+        var json = JsonSerializer.Serialize(command, SentinelProtocol.JsonOptions);
+        var deserialized = JsonSerializer.Deserialize<PipeCommand>(json, SentinelProtocol.JsonOptions);
+
+        Assert.NotNull(deserialized);
+        Assert.Equal("S-1-5-21-1000-1000-1000-1001", deserialized.UserSid);
+    }
 }

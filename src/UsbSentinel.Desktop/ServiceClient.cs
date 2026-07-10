@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Pipes;
+using System.Security.Principal;
 using System.Text.Json;
 using UsbSentinel.Contracts;
 
@@ -41,6 +42,7 @@ public sealed class ServiceClient : IDisposable
         string? confirmation = null,
         bool quickFormat = true,
         string fileSystem = "exFAT",
+        string? userSid = null,
         CancellationToken token = default)
     {
         if (_writer is null)
@@ -50,12 +52,21 @@ public sealed class ServiceClient : IDisposable
         {
             var payload = new PipeCommand(
                 SentinelProtocol.Version, command, settings, password, newPassword,
-                drive, confirmation, quickFormat, fileSystem);
+                drive, confirmation, quickFormat, fileSystem, userSid);
             await _writer.WriteLineAsync(JsonSerializer.Serialize(payload, SentinelProtocol.JsonOptions));
         }
         finally
         {
             _writeLock.Release();
+        }
+    }
+
+    public static string? CurrentUserSid
+    {
+        get
+        {
+            try { return WindowsIdentity.GetCurrent().User?.Value; }
+            catch (SystemException) { return null; }
         }
     }
 

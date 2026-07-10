@@ -184,7 +184,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             if (creatingPassword)
                 await _client.SendAsync(CommandType.SetPassword, password: password);
-            await _client.SendAsync(CommandType.EnableUsb, password: password);
+            await _client.SendAsync(CommandType.EnableUsb, password: password, userSid: ServiceClient.CurrentUserSid);
         }
         catch (Exception ex)
         {

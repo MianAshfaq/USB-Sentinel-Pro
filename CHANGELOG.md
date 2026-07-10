@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.6 - 2026-07-10
+
+- Fixed clean USB scans where LocalSystem could scan the drive but the requesting Windows user still could not open it in Explorer.
+- The desktop now sends the requester SID during Enable USB.
+- After a clean scan, the service grants that user Modify access on the USB drive root using Windows ACLs.
+
 ## 1.9.5 - 2026-07-10
 
 - Added strict drive-readiness checks before scanning and before showing USB access enabled.
