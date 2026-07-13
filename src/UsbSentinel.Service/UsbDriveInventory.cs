@@ -49,6 +49,36 @@ public sealed class UsbDriveInventory
         return devices.Values.OrderBy(device => device.Name, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
+    public IReadOnlyList<string> GetUsbDiskPnpDeviceIds()
+    {
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var usbPhysicalDrives = GetUsbPhysicalDriveIds();
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT DeviceID, InterfaceType, PNPDeviceID FROM Win32_DiskDrive");
+            foreach (ManagementObject disk in searcher.Get())
+            {
+                using (disk)
+                {
+                    if (!IsUsbBackedDisk(disk, usbPhysicalDrives))
+                        continue;
+                    var pnpId = disk["PNPDeviceID"]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(pnpId))
+                        ids.Add(pnpId);
+                }
+            }
+        }
+        catch (ManagementException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+
+        return ids.ToArray();
+    }
+
     public IReadOnlyList<string> GetMountedUsbVolumes()
     {
         var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

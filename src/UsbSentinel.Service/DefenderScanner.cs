@@ -12,8 +12,16 @@ public sealed class DefenderScanner
         ".exe", ".dll", ".scr", ".msi", ".cmd", ".bat", ".ps1", ".vbs", ".vbe",
         ".js", ".jse", ".wsf", ".hta", ".lnk", ".com", ".pif", ".jar"
     ];
+    private static readonly HashSet<string> FastGateExcludedDirectories = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "$Recycle.Bin", "Boot", "MSOCache", "PerfLogs", "Program Files",
+        "Program Files (x86)", "ProgramData", "Recovery", "System Volume Information", "Windows"
+    };
     private const long FullScanSizeLimitBytes = 64L * 1024 * 1024 * 1024;
-    private const int FastScanFileLimit = 250;
+    // Large disks use a focused Defender gate before access is approved. Keep the
+    // total bounded so slow installers cannot make approval take several minutes.
+    private const int DefaultFastScanFileLimit = 8;
+    private const long FastGateFileSizeLimitBytes = 128L * 1024 * 1024;
     private readonly string? _mpCmdRun = ResolveMpCmdRun();
     private DateTimeOffset? _lastSuccessfulSignatureUpdate;
 
@@ -53,6 +61,15 @@ public sealed class DefenderScanner
             : "Defender threat details are available in Windows Security Protection History.";
     }
 
+    public async Task<bool> IsRealTimeProtectionEnabledAsync(CancellationToken cancellationToken)
+    {
+        var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        var result = await RunProcessAsync(powershell,
+            "-NoProfile -NonInteractive -Command \"(Get-MpComputerStatus).RealTimeProtectionEnabled\"",
+            cancellationToken);
+        return result.ExitCode == 0 && bool.TryParse(result.Output.Trim(), out var enabled) && enabled;
+    }
+
     public async Task<bool> UpdateSignaturesAsync(Action<string> log, CancellationToken cancellationToken)
     {
         if (_mpCmdRun is null)
@@ -82,13 +99,14 @@ public sealed class DefenderScanner
         string drive,
         Action<string> log,
         Action<int> progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int fastTargetLimit = DefaultFastScanFileLimit)
     {
         var root = Path.GetPathRoot(drive) ?? drive;
         if (_mpCmdRun is null)
             return new DefenderScanResult(root, false, false, false, false, -1, "Microsoft Defender is unavailable.");
         progress(10);
-        var plan = BuildScanPlan(root);
+        var plan = BuildScanPlan(root, fastTargetLimit);
         log(plan.Description);
         var result = plan.FastGate
             ? await RunFastGateScanAsync(root, plan.Targets, log, progress, cancellationToken)
@@ -121,14 +139,8 @@ public sealed class DefenderScanner
         Action<int> progress,
         CancellationToken cancellationToken)
     {
-        log("Running Microsoft Defender quick scan before USB access.");
-        var quickScan = await RunAsync("-Scan -ScanType 1", null, cancellationToken);
-        if (quickScan.ExitCode is not 0 and not 2)
-            return quickScan;
-        if (quickScan.ExitCode == 2)
-            return quickScan;
-
-        var output = new StringBuilder(quickScan.Output);
+        log("Running focused Microsoft Defender checks on USB launch files.");
+        var output = new StringBuilder();
         var index = 0;
         foreach (var target in targets)
         {
@@ -143,18 +155,19 @@ public sealed class DefenderScanner
         }
 
         if (targets.Count == 0)
-            log($"No high-risk launch files were found on {root}; quick scan result is being used.");
+            log($"No high-risk launch files were found in the fast-gate locations on {root}.");
         return (0, output.ToString());
     }
 
-    private static ScanPlan BuildScanPlan(string root)
+    private static ScanPlan BuildScanPlan(string root, int fastTargetLimit)
     {
         try
         {
             var drive = new DriveInfo(root);
             if (drive.IsReady && drive.TotalSize > FullScanSizeLimitBytes)
             {
-                var targets = EnumerateFastGateTargets(root).ToArray();
+                var targets = EnumerateFastGateTargets(
+                    root, Math.Clamp(fastTargetLimit, 1, DefaultFastScanFileLimit)).ToArray();
                 return new ScanPlan(
                     true,
                     targets,
@@ -171,44 +184,121 @@ public sealed class DefenderScanner
         return new ScanPlan(false, Array.Empty<string>(), $"Starting Defender full custom scan of {root}");
     }
 
-    private static IEnumerable<string> EnumerateFastGateTargets(string root)
+    private static IEnumerable<string> EnumerateFastGateTargets(string root, int targetLimit)
     {
+        var emitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var count = 0;
         foreach (var fileName in new[] { "autorun.inf", "desktop.ini" })
         {
             var path = Path.Combine(root, fileName);
-            if (File.Exists(path))
+            if (File.Exists(path) && emitted.Add(path))
+            {
                 yield return path;
+                if (++count >= targetLimit)
+                    yield break;
+            }
         }
 
-        var options = new EnumerationOptions
+        foreach (var file in EnumerateHighRiskFiles(root, recurse: false))
         {
-            IgnoreInaccessible = true,
-            RecurseSubdirectories = true,
-            AttributesToSkip = FileAttributes.System | FileAttributes.Temporary
-        };
-        var count = 0;
-        IEnumerable<string> files;
+            if (!emitted.Add(file))
+                continue;
+            yield return file;
+            if (++count >= targetLimit)
+                yield break;
+        }
+
+        foreach (var directory in GetFastGateDirectories(root))
+        {
+            foreach (var file in EnumerateHighRiskFiles(directory, recurse: true))
+            {
+                if (!emitted.Add(file))
+                    continue;
+                yield return file;
+                if (++count >= targetLimit)
+                    yield break;
+            }
+        }
+    }
+
+    private static IEnumerable<string> GetFastGateDirectories(string root)
+    {
+        var directories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddDirectoryIfPresent(directories, Path.Combine(root, "Downloads"));
+
         try
         {
-            files = Directory.EnumerateFiles(root, "*", options);
+            var usersRoot = Path.Combine(root, "Users");
+            if (Directory.Exists(usersRoot))
+            {
+                foreach (var userDirectory in Directory.EnumerateDirectories(usersRoot))
+                {
+                    AddDirectoryIfPresent(directories, Path.Combine(userDirectory, "Downloads"));
+                    AddDirectoryIfPresent(directories, Path.Combine(userDirectory, "Desktop"));
+                    AddDirectoryIfPresent(directories, Path.Combine(userDirectory, "Documents"));
+                }
+            }
+
+            foreach (var directory in Directory.EnumerateDirectories(root))
+            {
+                if (!FastGateExcludedDirectories.Contains(Path.GetFileName(directory)))
+                    directories.Add(directory);
+            }
         }
         catch (IOException)
         {
-            yield break;
         }
         catch (UnauthorizedAccessException)
         {
-            yield break;
         }
 
-        foreach (var file in files)
+        return directories;
+    }
+
+    private static void AddDirectoryIfPresent(HashSet<string> directories, string path)
+    {
+        if (Directory.Exists(path))
+            directories.Add(path);
+    }
+
+    private static IEnumerable<string> EnumerateHighRiskFiles(string directory, bool recurse)
+    {
+        var options = new EnumerationOptions
         {
-            if (!HighRiskExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
-                continue;
-            yield return file;
-            count++;
-            if (count >= FastScanFileLimit)
-                yield break;
+            IgnoreInaccessible = true,
+            RecurseSubdirectories = recurse,
+            AttributesToSkip = FileAttributes.System | FileAttributes.Temporary
+        };
+        try
+        {
+            return Directory.EnumerateFiles(directory, "*", options)
+                .Where(file => HighRiskExtensions.Contains(
+                    Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
+                .Where(IsFastGateFileSize);
+        }
+        catch (IOException)
+        {
+            return Array.Empty<string>();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+    private static bool IsFastGateFileSize(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length <= FastGateFileSizeLimitBytes;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 

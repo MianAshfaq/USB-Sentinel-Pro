@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.10.3 - 2026-07-13
+
+- Reduced the total large-disk fast Defender gate from 24 to 8 focused launch-file checks, divided across connected partitions.
+- Preserved the full-scan recommendation for large storage; the fast gate is a bounded pre-access safety check.
+- Clarified cancelled operations so they are reported as cancelled and fail closed instead of appearing as an unexplained security failure.
+
+## 1.10.2 - 2026-07-13
+
+- Divides the fast-gate target budget across all connected partitions instead of applying the full budget to every drive letter.
+- Keeps files larger than 128 MB under mandatory Defender real-time protection rather than delaying USB approval while unpacking large installers.
+- Limits a two-partition external disk to 12 focused pre-access targets per partition while retaining 24 targets for a single-volume device.
+
+## 1.10.1 - 2026-07-13
+
+- Replaces the unrelated full-computer quick scan with focused Defender checks on the connected USB volumes.
+- Prioritizes USB root, download, desktop, and document launch files while excluding old Windows installation folders from the fast gate.
+- Reduces separate Defender process launches from 250 to 24 per large volume for a substantially faster approval path.
+- Requires Microsoft Defender real-time protection to be active so files remain protected after fast-gate access is approved.
+
+## 1.10.0 - 2026-07-13
+
+- Fixes the false Enabled state followed by `Security operation failed` after a delayed USB device removal event.
+- Restarts only the physical USB disk after a clean scan instead of also restarting its parent enclosure or bridge.
+- Requires approved drive letters to remain accessible after the controlled refresh settles before announcing access.
+- Removes the unnecessary enclosure restart that could request a system reboot and add more than 10 seconds per enable.
+
 ## 1.9.9 - 2026-07-13
 
 - Enables clean USB drives as soon as Windows reports them accessible after the controlled device refresh.

@@ -18,6 +18,7 @@ public sealed class SentinelCoordinator(
     private HashSet<string> _knownUsbDevices = new(StringComparer.OrdinalIgnoreCase);
     private DateTimeOffset _suppressVolumeEventsUntil;
     private DateTimeOffset _suppressHardwareEventsUntil;
+    private DateTimeOffset _lastControlledRefreshEventAt;
     private CancellationTokenSource? _operationCancellation;
     private SentinelSettings _settings = settingsRepository.Load();
     private ServiceSnapshot _snapshot = new(
@@ -118,6 +119,18 @@ public sealed class SentinelCoordinator(
                 }
             }
 
+            if (!await defender.IsRealTimeProtectionEnabledAsync(token))
+            {
+                BlockStorage();
+                SetState(UsbState.Failed, "Microsoft Defender real-time protection is disabled. USB storage is blocked.", 0, drives);
+                PublishLog(LogLevel.Error, "RealTimeProtectionDisabled",
+                    "USB access requires Microsoft Defender real-time protection to remain enabled.");
+                return;
+            }
+            PublishLog(LogLevel.Security, "RealTimeProtectionVerified",
+                "Microsoft Defender real-time protection is active.", result: "Enabled");
+
+            var fastTargetsPerDrive = Math.Max(4, 8 / drives.Count);
             for (var index = 0; index < drives.Count; index++)
             {
                 var drive = drives[index];
@@ -131,7 +144,8 @@ public sealed class SentinelCoordinator(
                         var overall = (index * 100 + value) / drives.Count;
                         SetState(UsbState.Scanning, $"Scanning {drive}", overall, drives);
                     },
-                    token);
+                    token,
+                    fastTargetsPerDrive);
 
                 if (!result.Succeeded || result.ThreatFound)
                 {
@@ -191,8 +205,9 @@ public sealed class SentinelCoordinator(
         catch (OperationCanceledException)
         {
             BlockStorage();
-            SetState(UsbState.Disabled, "Operation cancelled. USB storage is disabled.", 0, Array.Empty<string>());
-            PublishLog(LogLevel.Warning, "OperationCancelled", "USB operation was cancelled.");
+            SetState(UsbState.Disabled, "USB enable was cancelled. USB storage is disabled.", 0, Array.Empty<string>());
+            PublishLog(LogLevel.Warning, "OperationCancelled",
+                "USB enable was cancelled before verification completed; USB storage was disabled.");
         }
         catch (Exception ex)
         {
@@ -240,6 +255,8 @@ public sealed class SentinelCoordinator(
         }
         if (suppressed)
         {
+            lock (_deviceLock)
+                _lastControlledRefreshEventAt = DateTimeOffset.UtcNow;
             PublishLog(LogLevel.Information, "DeviceEventSuppressed",
                 "Ignoring temporary USB remove event during controlled device refresh.");
             return;
@@ -267,6 +284,8 @@ public sealed class SentinelCoordinator(
             return;
         if (suppressed)
         {
+            lock (_deviceLock)
+                _lastControlledRefreshEventAt = DateTimeOffset.UtcNow;
             PublishLog(LogLevel.Information, "DeviceEventSuppressed",
                 "USB volume returned after controlled device refresh.", added[0]);
             return;
@@ -295,6 +314,8 @@ public sealed class SentinelCoordinator(
                 _snapshot = _snapshot with { DetectedDevices = devices, UpdatedAt = DateTimeOffset.UtcNow };
             if (suppressed)
             {
+                lock (_deviceLock)
+                    _lastControlledRefreshEventAt = DateTimeOffset.UtcNow;
                 Publish(new PipeEvent(SentinelProtocol.Version, EventType.Snapshot, Snapshot: Snapshot));
                 return;
             }
@@ -571,12 +592,8 @@ public sealed class SentinelCoordinator(
         IReadOnlyList<string> approvedDrives,
         CancellationToken token)
     {
-        var devices = inventory.GetConnectedUsbStorageDevices()
-            .Select(device => device.Id)
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        if (devices.Length == 0)
+        var devices = inventory.GetUsbDiskPnpDeviceIds();
+        if (devices.Count == 0)
             return approvedDrives;
 
         SuppressDeviceEvents(TimeSpan.FromSeconds(75));
@@ -598,11 +615,15 @@ public sealed class SentinelCoordinator(
                 result: succeeded ? "Restarted" : "Failed");
         }
 
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(12);
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(20);
         while (DateTimeOffset.UtcNow < deadline)
         {
             token.ThrowIfCancellationRequested();
-            if (approvedDrives.All(inventory.IsAccessibleDriveRoot))
+            DateTimeOffset lastRefreshEvent;
+            lock (_deviceLock)
+                lastRefreshEvent = _lastControlledRefreshEventAt;
+            var refreshIsStable = DateTimeOffset.UtcNow - lastRefreshEvent >= TimeSpan.FromSeconds(2);
+            if (refreshIsStable && approvedDrives.All(inventory.IsAccessibleDriveRoot))
                 return approvedDrives;
             await Task.Delay(150, token);
         }
@@ -620,6 +641,7 @@ public sealed class SentinelCoordinator(
             var until = DateTimeOffset.UtcNow.Add(duration);
             _suppressVolumeEventsUntil = until;
             _suppressHardwareEventsUntil = until;
+            _lastControlledRefreshEventAt = DateTimeOffset.UtcNow;
         }
     }
 
