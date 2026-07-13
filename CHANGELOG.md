@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.10.5 - 2026-07-13
+
+- Fixed false Enabled state when `pnputil` reports that a USB disk refresh requires a reboot.
+- Added a live PnP disable/enable fallback for USB-SATA bridges that reject restart.
+- Access now remains blocked and the UI reports a clear refresh failure unless Windows confirms the device refresh.
+
 ## 1.10.4 - 2026-07-13
 
 - Fixed Disable USB leaving already-mounted USB volumes accessible after the block policy was written.

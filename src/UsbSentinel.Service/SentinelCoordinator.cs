@@ -185,7 +185,19 @@ public sealed class SentinelCoordinator(
                 }
 
                 SetState(UsbState.Enabling, "Scan passed. Finalizing USB access.", 99, drives);
-                drives = await RefreshUsbDeviceAccessAsync(drives, token);
+                var refresh = await RefreshUsbDeviceAccessAsync(drives, token);
+                if (!refresh.Succeeded)
+                {
+                    TryBlockStorage();
+                    SetState(UsbState.Failed,
+                        "Defender scan passed, but Windows could not refresh USB access. USB storage remains blocked.",
+                        100, drives);
+                    PublishLog(LogLevel.Error, "AccessRefreshFailed",
+                        "Windows reported that the USB device refresh requires a system reboot; access was not enabled.",
+                        result: "Blocked");
+                    return;
+                }
+                drives = refresh.Drives;
             }
 
             var inaccessible = drives.Where(drive => !inventory.IsAccessibleDriveRoot(drive)).ToArray();
@@ -234,7 +246,11 @@ public sealed class SentinelCoordinator(
             // policy is applied so Explorer loses access to existing volumes too.
             SuppressDeviceEvents(TimeSpan.FromSeconds(30));
             BlockStorage();
-            await RefreshUsbDeviceAccessAsync(Array.Empty<string>(), cancellationToken);
+            var refresh = await RefreshUsbDeviceAccessAsync(Array.Empty<string>(), cancellationToken);
+            if (!refresh.Succeeded)
+                PublishLog(LogLevel.Warning, "AccessRefreshFailed",
+                    "The USB block policy was applied, but Windows could not refresh one or more mounted devices.",
+                    result: "Policy blocked");
             SetState(UsbState.Disabled, "USB storage is disabled.", 0, Array.Empty<string>());
             PublishLog(LogLevel.Security, "Disabled", "USB storage was disabled by administrator.");
         }
@@ -593,16 +609,17 @@ public sealed class SentinelCoordinator(
         }
     }
 
-    private async Task<IReadOnlyList<string>> RefreshUsbDeviceAccessAsync(
+    private async Task<(IReadOnlyList<string> Drives, bool Succeeded)> RefreshUsbDeviceAccessAsync(
         IReadOnlyList<string> approvedDrives,
         CancellationToken token)
     {
         var devices = inventory.GetUsbDiskPnpDeviceIds();
         if (devices.Count == 0)
-            return approvedDrives;
+            return (approvedDrives, true);
 
         SuppressDeviceEvents(TimeSpan.FromSeconds(75));
         var pnputil = Path.Combine(Environment.SystemDirectory, "pnputil.exe");
+        var allSucceeded = true;
         foreach (var deviceId in devices)
         {
             token.ThrowIfCancellationRequested();
@@ -610,8 +627,29 @@ public sealed class SentinelCoordinator(
                 pnputil,
                 $"/restart-device \"{deviceId.Replace("\"", "\\\"")}\"",
                 token);
-            var succeeded = result.ExitCode == 0 &&
-                result.Output.Contains("Device restarted successfully", StringComparison.OrdinalIgnoreCase);
+            var succeeded = PnpOperationSucceeded(result, "Device restarted successfully");
+            if (!succeeded)
+            {
+                // Some USB-SATA bridges reject restart and report that a reboot is
+                // required. Try a live PnP disable/enable cycle before failing closed.
+                PublishLog(LogLevel.Warning, "UsbDeviceRestartFallback",
+                    "USB restart was not completed; trying a live PnP disable/enable refresh.",
+                    result: "Fallback");
+                var disabled = await DefenderScanner.RunProcessAsync(
+                    pnputil,
+                    $"/disable-device \"{deviceId.Replace("\"", "\\\"")}\" /force",
+                    token);
+                var enabled = disabled.ExitCode == 0
+                    ? await DefenderScanner.RunProcessAsync(
+                        pnputil,
+                        $"/enable-device \"{deviceId.Replace("\"", "\\\"")}\"",
+                        token)
+                    : (ExitCode: -1, Output: disabled.Output);
+                succeeded = PnpOperationSucceeded(disabled, "Device disabled successfully") &&
+                    PnpOperationSucceeded(enabled, "Device enabled successfully");
+            }
+
+            allSucceeded &= succeeded;
             PublishLog(succeeded ? LogLevel.Security : LogLevel.Warning,
                 succeeded ? "UsbDeviceRestarted" : "UsbDeviceRestartFailed",
                 succeeded
@@ -619,6 +657,9 @@ public sealed class SentinelCoordinator(
                     : $"Could not refresh USB storage device access state: {result.Output.Trim()}",
                 result: succeeded ? "Restarted" : "Failed");
         }
+
+        if (!allSucceeded)
+            return (approvedDrives, false);
 
         var deadline = DateTimeOffset.UtcNow.AddSeconds(20);
         while (DateTimeOffset.UtcNow < deadline)
@@ -629,15 +670,23 @@ public sealed class SentinelCoordinator(
                 lastRefreshEvent = _lastControlledRefreshEventAt;
             var refreshIsStable = DateTimeOffset.UtcNow - lastRefreshEvent >= TimeSpan.FromSeconds(2);
             if (refreshIsStable && approvedDrives.All(inventory.IsAccessibleDriveRoot))
-                return approvedDrives;
+                return (approvedDrives, true);
             await Task.Delay(150, token);
         }
 
         // A drive letter can rarely change while Windows restarts a USB disk. Use one
         // complete inventory refresh only after the fast path has timed out.
         var rediscoveredDrives = GetUsbDrives();
-        return rediscoveredDrives.Count > 0 ? rediscoveredDrives : approvedDrives;
+        return (rediscoveredDrives.Count > 0 ? rediscoveredDrives : approvedDrives, true);
     }
+
+    private static bool PnpOperationSucceeded(
+        (int ExitCode, string Output) result,
+        string successText) =>
+        result.ExitCode == 0 &&
+        result.Output.Contains(successText, StringComparison.OrdinalIgnoreCase) &&
+        !result.Output.Contains("reboot", StringComparison.OrdinalIgnoreCase) &&
+        !result.Output.Contains("failed", StringComparison.OrdinalIgnoreCase);
 
     private void SuppressDeviceEvents(TimeSpan duration)
     {
