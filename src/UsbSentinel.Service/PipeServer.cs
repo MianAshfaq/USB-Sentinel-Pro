@@ -164,6 +164,12 @@ public sealed class PipeServer(SentinelCoordinator coordinator, PasswordReposito
                 }
                 break;
             case CommandType.ResetPassword:
+                if (!client.IsAdministrator)
+                {
+                    await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.Error,
+                        Message: "Password recovery requires a local Windows administrator."), token);
+                    break;
+                }
                 if (passwords.TryReset(command.NewPassword, out var resetError))
                 {
                     coordinator.RecordSecurityEvent("PasswordResetByAdministrator",
@@ -176,6 +182,26 @@ public sealed class PipeServer(SentinelCoordinator coordinator, PasswordReposito
                     await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.Error,
                         Message: resetError), token);
                 }
+                break;
+            case CommandType.GetQuarantine:
+                await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.Snapshot,
+                    Quarantine: await coordinator.GetQuarantineAsync(token)), token);
+                break;
+            case CommandType.RestoreQuarantine:
+                if (!passwords.Verify(command.Password, out var restoreError))
+                {
+                    await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.Error, Message: restoreError), token);
+                    break;
+                }
+                _ = coordinator.RestoreQuarantineAsync(command.ThreatId ?? string.Empty, token);
+                break;
+            case CommandType.DeleteQuarantine:
+                if (!passwords.Verify(command.Password, out var deleteError))
+                {
+                    await client.SendAsync(new PipeEvent(SentinelProtocol.Version, EventType.Error, Message: deleteError), token);
+                    break;
+                }
+                _ = coordinator.DeleteQuarantineAsync(command.ThreatId ?? string.Empty, token);
                 break;
             case CommandType.RemediateThreats:
                 if (!passwords.Verify(command.Password, out var remediationError))
@@ -223,10 +249,30 @@ public sealed class PipeServer(SentinelCoordinator coordinator, PasswordReposito
     {
         private readonly SemaphoreSlim _writeLock = new(1, 1);
         private readonly StreamWriter _writer;
+        private readonly NamedPipeServerStream _pipe;
         public StreamReader Reader { get; }
+
+        public bool IsAdministrator
+        {
+            get
+            {
+                var administrator = false;
+                try
+                {
+                    _pipe.RunAsClient(() =>
+                    {
+                        using var identity = WindowsIdentity.GetCurrent();
+                        administrator = new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
+                    });
+                }
+                catch (InvalidOperationException) { }
+                return administrator;
+            }
+        }
 
         public ClientConnection(Stream stream)
         {
+            _pipe = (NamedPipeServerStream)stream;
             Reader = new StreamReader(stream, leaveOpen: true);
             _writer = new StreamWriter(stream, leaveOpen: true) { AutoFlush = true };
         }

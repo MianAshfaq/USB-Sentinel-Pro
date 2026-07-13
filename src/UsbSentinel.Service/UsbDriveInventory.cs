@@ -79,6 +79,82 @@ public sealed class UsbDriveInventory
         return ids.ToArray();
     }
 
+    public IReadOnlyList<UsbHardwareInfo> GetHardwareInventory()
+    {
+        var result = new List<UsbHardwareInfo>();
+        var usbPhysicalDrives = GetUsbPhysicalDriveIds();
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT DeviceID, InterfaceType, PNPDeviceID, Model, SerialNumber, Size FROM Win32_DiskDrive");
+            foreach (ManagementObject disk in searcher.Get())
+            {
+                using (disk)
+                {
+                    if (!IsUsbBackedDisk(disk, usbPhysicalDrives))
+                        continue;
+                    var deviceId = disk["PNPDeviceID"]?.ToString() ?? disk["DeviceID"]?.ToString() ?? "USB";
+                    var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (ManagementObject partition in disk.GetRelated("Win32_DiskPartition"))
+                    {
+                        using (partition)
+                        foreach (ManagementObject logicalDisk in partition.GetRelated("Win32_LogicalDisk"))
+                        {
+                            using (logicalDisk)
+                            {
+                                if (TryNormalizeDriveRoot(logicalDisk["DeviceID"]?.ToString(), out var root))
+                                    roots.Add(root);
+                            }
+                        }
+                    }
+                    var formats = roots.Select(root =>
+                    {
+                        try { return new DriveInfo(root).DriveFormat; }
+                        catch { return "Unknown"; }
+                    }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                    var size = long.TryParse(disk["Size"]?.ToString(), out var bytes)
+                        ? FormatCapacity(bytes) : "Unknown";
+                    result.Add(new UsbHardwareInfo(
+                        deviceId,
+                        disk["Model"]?.ToString()?.Trim() ?? "USB storage device",
+                        disk["SerialNumber"]?.ToString()?.Trim() ?? "Unknown",
+                        size,
+                        formats.Length == 0 ? "Unknown" : string.Join(", ", formats),
+                        roots.OrderBy(root => root, StringComparer.OrdinalIgnoreCase).ToArray()));
+                }
+            }
+        }
+        catch (ManagementException) { }
+        catch (UnauthorizedAccessException) { }
+        return result;
+    }
+
+    public IReadOnlyList<string> DismountUsbVolumes()
+    {
+        var dismounted = new List<string>();
+        var roots = GetMountedUsbVolumes();
+        foreach (var root in roots)
+        {
+            try
+            {
+                using var searcher = new ManagementObjectSearcher(
+                    $"SELECT DriveLetter FROM Win32_Volume WHERE DriveLetter = '{root[..2]}'");
+                foreach (ManagementObject volume in searcher.Get())
+                {
+                    using (volume)
+                    {
+                        var result = volume.InvokeMethod("Dismount", new object[] { false, false });
+                        if (result is bool success && success)
+                            dismounted.Add(root);
+                    }
+                }
+            }
+            catch (ManagementException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        return dismounted;
+    }
+
     public IReadOnlyList<string> GetMountedUsbVolumes()
     {
         var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -151,6 +227,20 @@ public sealed class UsbDriveInventory
                pnpDeviceId.StartsWith("USBSTOR", StringComparison.OrdinalIgnoreCase) ||
                pnpDeviceId.Contains("USB", StringComparison.OrdinalIgnoreCase) ||
                (!string.IsNullOrWhiteSpace(deviceId) && usbPhysicalDrives.Contains(deviceId));
+    }
+
+    private static string FormatCapacity(long bytes)
+    {
+        if (bytes <= 0) return "Unknown";
+        var units = new[] { "B", "GB", "TB" };
+        var value = (double)bytes;
+        var index = 0;
+        while (value >= 1024 && index < units.Length - 1)
+        {
+            value /= 1024;
+            index++;
+        }
+        return $"{value:0.0} {units[index]}";
     }
 
     private static IReadOnlySet<string> GetUsbPhysicalDriveIds()

@@ -104,6 +104,27 @@ public sealed class LogRepository
     }
 
     internal string ConnectionString => _connectionString;
+
+    public ScanStatistics GetScanStatistics()
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT
+              COALESCE(SUM(CASE WHEN EventType = 'ScanClean' THEN 1 ELSE 0 END), 0),
+              COALESCE(SUM(CASE WHEN EventType = 'ThreatFound' THEN 1 ELSE 0 END), 0),
+              COALESCE(SUM(CASE WHEN EventType IN ('ScanFailed', 'AccessRefreshFailed') THEN 1 ELSE 0 END), 0)
+            FROM Logs;
+            """;
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+            return new ScanStatistics(0, 0, 0, 0);
+        var clean = reader.GetInt32(0);
+        var threats = reader.GetInt32(1);
+        var failed = reader.GetInt32(2);
+        return new ScanStatistics(clean, threats, failed, clean + threats + failed);
+    }
 }
 
 public sealed class SettingsRepository(LogRepository logs)

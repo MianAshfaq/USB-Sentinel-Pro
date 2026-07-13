@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows;
 using MessageBox = System.Windows.MessageBox;
+using UsbSentinel.Contracts;
 
 namespace UsbSentinel.Desktop;
 
@@ -21,6 +22,7 @@ public partial class MainWindow : Window
         _viewModel.ChangePasswordPrompt = ShowChangePasswordDialog;
         _viewModel.ResetPasswordPrompt = ShowResetPasswordDialog;
         _viewModel.FormatUsbPrompt = ShowFormatUsbDialog;
+        _viewModel.QuarantinePrompt = ShowQuarantineDialog;
         _viewModel.PostOperationEnablePrompt = ShowPostOperationEnablePrompt;
         _viewModel.PasswordSetupRequired += OnPasswordSetupRequired;
         _viewModel.TrayStatusChanged += status => ((App)System.Windows.Application.Current).UpdateTrayStatus(status);
@@ -95,6 +97,18 @@ public partial class MainWindow : Window
     private FormatUsbRequest? ShowFormatUsbDialog(IReadOnlyList<string> drives)
     {
         var dialog = new FormatUsbDialog(drives) { Owner = this };
+        return dialog.ShowDialog() == true ? dialog.Request : null;
+    }
+
+    private QuarantineActionRequest? ShowQuarantineDialog(IReadOnlyList<QuarantineItem> items)
+    {
+        if (items.Count == 0)
+        {
+            MessageBox.Show(this, "Microsoft Defender has no recorded quarantine detections.",
+                "Defender quarantine", MessageBoxButton.OK, MessageBoxImage.Information);
+            return null;
+        }
+        var dialog = new QuarantineDialog(items) { Owner = this };
         return dialog.ShowDialog() == true ? dialog.Request : null;
     }
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.11.0 - 2026-07-14
+
+- Added Defender quarantine review with password-protected restore and delete actions.
+- Added safe USB volume dismount before Disable USB, followed by policy enforcement and device refresh.
+- Added administrator-gated forgotten-password recovery.
+- Added USB hardware health details: model, serial number, capacity, filesystem, and drive letters.
+- Added scan history statistics for total, clean, threat, and failed results.
+- Added GitHub release update checking with an in-app update notification and MSI launcher.
+
 ## 1.10.5 - 2026-07-13
 
 - Fixed false Enabled state when `pnputil` reports that a USB disk refresh requires a reboot.

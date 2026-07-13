@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Win32;
 using UsbSentinel.Contracts;
 
@@ -318,6 +319,60 @@ public sealed class DefenderScanner
             cancellationToken);
         log(result.Output);
         return result.ExitCode == 0;
+    }
+
+    public async Task<IReadOnlyList<QuarantineItem>> GetQuarantineAsync(CancellationToken cancellationToken)
+    {
+        var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        var result = await RunProcessAsync(powershell,
+            "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"Get-MpThreatDetection | Select-Object ThreatID,ThreatStatusID,InitialDetectionTime,Resources | ConvertTo-Json -Compress -Depth 6\"",
+            cancellationToken);
+        if (result.ExitCode != 0 || string.IsNullOrWhiteSpace(result.Output))
+            return Array.Empty<QuarantineItem>();
+
+        try
+        {
+            using var document = JsonDocument.Parse(result.Output);
+            var elements = document.RootElement.ValueKind == JsonValueKind.Array
+                ? document.RootElement.EnumerateArray()
+                : new[] { document.RootElement }.AsEnumerable();
+            return elements.Select(item => new QuarantineItem(
+                GetJsonText(item, "ThreatID"),
+                GetJsonText(item, "ThreatStatusID"),
+                GetJsonText(item, "InitialDetectionTime"),
+                GetJsonText(item, "Resources"))).ToArray();
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<QuarantineItem>();
+        }
+    }
+
+    public async Task<bool> RestoreQuarantineAsync(string threatId, CancellationToken cancellationToken)
+    {
+        var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        var escaped = threatId.Replace("'", "''", StringComparison.Ordinal);
+        var result = await RunProcessAsync(powershell,
+            $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"Restore-MpThreat -ThreatID '{escaped}' -ErrorAction Stop\"",
+            cancellationToken);
+        return result.ExitCode == 0;
+    }
+
+    public async Task<bool> DeleteQuarantineAsync(string threatId, CancellationToken cancellationToken)
+    {
+        var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        var escaped = threatId.Replace("'", "''", StringComparison.Ordinal);
+        var result = await RunProcessAsync(powershell,
+            $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"Remove-MpThreat -ThreatID '{escaped}' -ErrorAction Stop\"",
+            cancellationToken);
+        return result.ExitCode == 0;
+    }
+
+    private static string GetJsonText(JsonElement item, string property)
+    {
+        if (!item.TryGetProperty(property, out var value) || value.ValueKind == JsonValueKind.Null)
+            return "Unknown";
+        return value.ValueKind == JsonValueKind.String ? value.GetString() ?? "Unknown" : value.ToString();
     }
 
     private async Task<(int ExitCode, string Output)> RunAsync(

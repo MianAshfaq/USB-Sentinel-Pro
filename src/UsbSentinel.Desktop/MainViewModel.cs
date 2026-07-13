@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Speech.Synthesis;
 using System.Windows.Media;
@@ -21,6 +22,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private SpeechSynthesizer? _speech;
     private readonly DispatcherTimer _animationTimer;
     private readonly DispatcherTimer _reconnectTimer;
+    private readonly UpdateService _updates = new();
     private ServiceSnapshot? _snapshot;
     private bool _connected;
     private double _ringAngle;
@@ -47,6 +49,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OpenSecurityCommand = new RelayCommand(OpenWindowsSecurityAsync);
         RemediateThreatsCommand = new RelayCommand(RemediateThreatsAsync, () => _connected && PasswordConfigured && !UsbOperationBusy);
         FormatUsbCommand = new RelayCommand(FormatUsbAsync, () => _connected && !UsbOperationBusy && (_snapshot?.ConnectedDrives.Count ?? 0) > 0);
+        ReviewQuarantineCommand = new RelayCommand(ReviewQuarantineAsync, () => _connected);
+        UpdateCommand = new RelayCommand(UpdateAsync, () => UpdateAvailable is not null);
         OpenFacebookCommand = new RelayCommand(() => OpenUrlAsync("https://fb.com/MianAshfaq012"));
         OpenGitHubCommand = new RelayCommand(() => OpenUrlAsync("https://github.com/MianAshfaq"));
         OpenWebsiteCommand = new RelayCommand(() => OpenUrlAsync("https://cyberoly.com"));
@@ -78,6 +82,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public RelayCommand OpenSecurityCommand { get; }
     public RelayCommand RemediateThreatsCommand { get; }
     public RelayCommand FormatUsbCommand { get; }
+    public RelayCommand ReviewQuarantineCommand { get; }
+    public RelayCommand UpdateCommand { get; }
     public RelayCommand OpenFacebookCommand { get; }
     public RelayCommand OpenGitHubCommand { get; }
     public RelayCommand OpenWebsiteCommand { get; }
@@ -85,6 +91,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public Func<(string CurrentPassword, string NewPassword)?>? ChangePasswordPrompt { get; set; }
     public Func<string?>? ResetPasswordPrompt { get; set; }
     public Func<IReadOnlyList<string>, FormatUsbRequest?>? FormatUsbPrompt { get; set; }
+    public Func<IReadOnlyList<QuarantineItem>, QuarantineActionRequest?>? QuarantinePrompt { get; set; }
     public Func<string, bool>? PostOperationEnablePrompt { get; set; }
     public event EventHandler? PasswordSetupRequired;
     public event Action<string>? TrayStatusChanged;
@@ -106,6 +113,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool PasswordConfigured => _snapshot?.PasswordConfigured ?? false;
     public string DefenderStatusText => _snapshot?.DefenderAvailable == true ? "ENGINE READY" : "ENGINE UNAVAILABLE";
     public string DefenderSignatureText => $"SIGNATURE {_snapshot?.DefenderSignatureVersion ?? "Unknown"}";
+    public string ScanStatisticsText => _snapshot?.ScanStatistics is { } stats
+        ? $"TOTAL {stats.Total}   CLEAN {stats.Clean}   THREATS {stats.Threats}   FAILED {stats.Failed}"
+        : "TOTAL 0   CLEAN 0   THREATS 0   FAILED 0";
+    public string HardwareInventoryText => _snapshot?.Hardware is { Count: > 0 } hardware
+        ? string.Join(Environment.NewLine, hardware.Select(item =>
+            $"{item.Model} | {item.Capacity} | {item.FileSystem} | S/N {item.SerialNumber} | {string.Join(", ", item.Drives)}"))
+        : "No USB hardware details available";
+    public AppUpdateInfo? UpdateAvailable { get; private set; }
+    public string UpdateText => UpdateAvailable is null ? "" : $"UPDATE AVAILABLE {UpdateAvailable.Version}";
     public System.Windows.Media.Brush ConnectionBrush => Connected ? MediaBrushes.SpringGreen : MediaBrushes.IndianRed;
     public System.Windows.Media.Brush StatusBrush => State switch
     {
@@ -138,12 +154,42 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             RefreshCommand.RaiseCanExecuteChanged();
             RemediateThreatsCommand.RaiseCanExecuteChanged();
             FormatUsbCommand.RaiseCanExecuteChanged();
+            ReviewQuarantineCommand.RaiseCanExecuteChanged();
+            UpdateCommand.RaiseCanExecuteChanged();
         }
     }
 
     public async Task StartAsync()
     {
         await EnsureConnectedAsync();
+        _ = CheckForUpdatesAsync();
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        try
+        {
+            UpdateAvailable = await _updates.CheckAsync();
+            OnPropertyChanged(nameof(UpdateAvailable));
+            OnPropertyChanged(nameof(UpdateText));
+            UpdateCommand.RaiseCanExecuteChanged();
+            if (UpdateAvailable is not null)
+                TrayNotificationRequested?.Invoke("USB Sentinel Pro", $"Version {UpdateAvailable.Version} is available.", false);
+        }
+        catch (HttpRequestException) { }
+        catch (TaskCanceledException) { }
+    }
+
+    private async Task UpdateAsync()
+    {
+        if (UpdateAvailable is null)
+            return;
+        try
+        {
+            await _updates.DownloadAndStartAsync(UpdateAvailable);
+            Logs.Add($"[{DateTime.Now:HH:mm:ss}] INFORMATION    Update installer started.");
+        }
+        catch (Exception ex) { AddError($"Update failed: {ex.Message}"); }
     }
 
     private async Task EnsureConnectedAsync()
@@ -278,6 +324,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             confirmation: request.Confirmation, quickFormat: request.QuickFormat, fileSystem: request.FileSystem);
     }
 
+    private async Task ReviewQuarantineAsync()
+    {
+        try { await _client.SendAsync(CommandType.GetQuarantine); }
+        catch (Exception ex) { AddError(ex.Message); }
+    }
+
     private static Task OpenUrlAsync(string url)
     {
         Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
@@ -300,6 +352,21 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             if (pipeEvent.Snapshot is not null)
                 ApplySnapshot(pipeEvent.Snapshot);
+            if (pipeEvent.Quarantine is not null)
+            {
+                QuarantineItems.Clear();
+                foreach (var item in pipeEvent.Quarantine)
+                    QuarantineItems.Add(item);
+                var request = QuarantinePrompt?.Invoke(pipeEvent.Quarantine);
+                if (request is not null)
+                {
+                    var password = PasswordPrompt?.Invoke(false);
+                    if (!string.IsNullOrWhiteSpace(password))
+                        _ = _client.SendAsync(
+                            request.Action == "Restore" ? CommandType.RestoreQuarantine : CommandType.DeleteQuarantine,
+                            password: password, threatId: request.ThreatId);
+                }
+            }
             if (pipeEvent.Log is not null)
             {
                 var log = pipeEvent.Log;
@@ -360,6 +427,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         OnPropertyChanged(nameof(PasswordConfigured));
         OnPropertyChanged(nameof(DefenderStatusText));
         OnPropertyChanged(nameof(DefenderSignatureText));
+        OnPropertyChanged(nameof(ScanStatisticsText));
+        OnPropertyChanged(nameof(HardwareInventoryText));
         ChangePasswordCommand.RaiseCanExecuteChanged();
         ResetPasswordCommand.RaiseCanExecuteChanged();
         RemediateThreatsCommand.RaiseCanExecuteChanged();
@@ -482,6 +551,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+    public ObservableCollection<QuarantineItem> QuarantineItems { get; } = new();
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 
@@ -502,3 +572,5 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _client.Dispose();
     }
 }
+
+public sealed record QuarantineActionRequest(string Action, string ThreatId);

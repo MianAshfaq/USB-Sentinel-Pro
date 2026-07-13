@@ -37,12 +37,32 @@ public sealed class SentinelCoordinator(
                 {
                     PasswordConfigured = passwords.IsConfigured,
                     DefenderAvailable = defender.IsAvailable,
-                    DefenderSignatureVersion = defender.SignatureVersion
+                    DefenderSignatureVersion = defender.SignatureVersion,
+                    ScanStatistics = logs.GetScanStatistics()
                 };
         }
     }
 
     public IReadOnlyList<LogEntry> RecentLogs => logs.GetRecent();
+
+    public Task<IReadOnlyList<QuarantineItem>> GetQuarantineAsync(CancellationToken token) =>
+        defender.GetQuarantineAsync(token);
+
+    public async Task RestoreQuarantineAsync(string threatId, CancellationToken token)
+    {
+        var succeeded = await defender.RestoreQuarantineAsync(threatId, token);
+        PublishLog(succeeded ? LogLevel.Security : LogLevel.Error, "QuarantineRestore",
+            succeeded ? $"Defender restored quarantined threat {threatId}." : $"Defender could not restore threat {threatId}.",
+            result: succeeded ? "Restored" : "Failed");
+    }
+
+    public async Task DeleteQuarantineAsync(string threatId, CancellationToken token)
+    {
+        var succeeded = await defender.DeleteQuarantineAsync(threatId, token);
+        PublishLog(succeeded ? LogLevel.Security : LogLevel.Error, "QuarantineDelete",
+            succeeded ? $"Defender deleted quarantined threat {threatId}." : $"Defender could not delete threat {threatId}.",
+            result: succeeded ? "Deleted" : "Failed");
+    }
 
     public void InitializeFailClosed()
     {
@@ -245,6 +265,9 @@ public sealed class SentinelCoordinator(
             // are already mounted. Refresh the physical USB disks after fail-closed
             // policy is applied so Explorer loses access to existing volumes too.
             SuppressDeviceEvents(TimeSpan.FromSeconds(30));
+            var dismounted = inventory.DismountUsbVolumes();
+            if (dismounted.Count > 0)
+                PublishLog(LogLevel.Security, "SafeEject", $"Safely dismounted USB volumes: {string.Join(", ", dismounted)}.", result: "Dismounted");
             BlockStorage();
             var refresh = await RefreshUsbDeviceAccessAsync(Array.Empty<string>(), cancellationToken);
             if (!refresh.Succeeded)
@@ -553,7 +576,9 @@ public sealed class SentinelCoordinator(
                 PasswordConfigured: passwords.IsConfigured,
                 DefenderAvailable: defender.IsAvailable,
                 DefenderSignatureVersion: defender.SignatureVersion,
-                DetectedDevices: inventory.GetConnectedUsbStorageDevices());
+                DetectedDevices: inventory.GetConnectedUsbStorageDevices(),
+                Hardware: inventory.GetHardwareInventory(),
+                ScanStatistics: logs.GetScanStatistics());
         }
         Publish(new PipeEvent(SentinelProtocol.Version, EventType.StateChanged, Snapshot: Snapshot, Progress: progress));
     }

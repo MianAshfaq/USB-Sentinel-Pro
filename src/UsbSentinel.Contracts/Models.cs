@@ -6,7 +6,7 @@ namespace UsbSentinel.Contracts;
 public static class SentinelProtocol
 {
     public const string PipeName = "UsbSentinelPro";
-    public const int Version = 4;
+    public const int Version = 5;
     public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() }
@@ -35,7 +35,10 @@ public enum CommandType
     ChangePassword,
     ResetPassword,
     RemediateThreats,
-    FormatUsb
+    FormatUsb,
+    GetQuarantine,
+    RestoreQuarantine,
+    DeleteQuarantine
 }
 
 public enum EventType
@@ -66,6 +69,22 @@ public sealed record SentinelSettings(
     public bool ScanBeforeEnable => true;
 }
 
+public sealed record ScanStatistics(int Clean, int Threats, int Failed, int Total);
+
+public sealed record UsbHardwareInfo(
+    string DeviceId,
+    string Model,
+    string SerialNumber,
+    string Capacity,
+    string FileSystem,
+    IReadOnlyList<string> Drives);
+
+public sealed record QuarantineItem(
+    string ThreatId,
+    string Status,
+    string DetectedAt,
+    string Resources);
+
 public sealed record ServiceSnapshot(
     UsbState State,
     bool StorageBlocked,
@@ -77,7 +96,9 @@ public sealed record ServiceSnapshot(
     bool PasswordConfigured = false,
     bool DefenderAvailable = false,
     string DefenderSignatureVersion = "Unknown",
-    IReadOnlyList<UsbDeviceInfo>? DetectedDevices = null);
+    IReadOnlyList<UsbDeviceInfo>? DetectedDevices = null,
+    IReadOnlyList<UsbHardwareInfo>? Hardware = null,
+    ScanStatistics? ScanStatistics = null);
 
 public sealed record UsbDeviceInfo(string Id, string Name, string Status);
 
@@ -91,7 +112,8 @@ public sealed record PipeCommand(
     string? Confirmation = null,
     bool QuickFormat = true,
     string FileSystem = "exFAT",
-    string? UserSid = null);
+    string? UserSid = null,
+    string? ThreatId = null);
 
 public sealed record PipeEvent(
     int ProtocolVersion,
@@ -99,7 +121,8 @@ public sealed record PipeEvent(
     ServiceSnapshot? Snapshot = null,
     LogEntry? Log = null,
     int? Progress = null,
-    string? Message = null);
+    string? Message = null,
+    IReadOnlyList<QuarantineItem>? Quarantine = null);
 
 public sealed record LogEntry(
     long Id,
