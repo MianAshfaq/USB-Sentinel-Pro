@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.9 - 2026-07-13
+
+- Enables clean USB drives as soon as Windows reports them accessible after the controlled device refresh.
+- Replaces the fixed post-scan delay and repeated WMI discovery with 150 ms readiness checks and a safe timeout fallback.
+- Shows a clear finalizing-access state between a successful Defender scan and Explorer access.
+
 ## 1.9.8 - 2026-07-11
 
 - Fixed repeated scan/disable loop caused by Windows remove/insert events during the service's own USB device refresh.

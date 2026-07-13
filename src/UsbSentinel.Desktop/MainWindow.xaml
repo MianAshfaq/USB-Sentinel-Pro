@@ -365,7 +365,7 @@
                             </StackPanel>
                             <Separator Background="{StaticResource BorderBrush}" Margin="0,24"/>
                             <TextBlock Text="EDITION" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
-                            <TextBlock Text="Community 1.9.8" Margin="0,7,0,0" FontWeight="SemiBold"/>
+                            <TextBlock Text="Community 1.9.9" Margin="0,7,0,0" FontWeight="SemiBold"/>
                             <TextBlock Text="Microsoft Defender integration" Margin="0,20,0,0" Foreground="{StaticResource MutedBrush}"/>
                             <TextBlock Text="Windows 11 x64" Margin="0,5,0,0" Foreground="{StaticResource MutedBrush}"/>
                         </StackPanel>

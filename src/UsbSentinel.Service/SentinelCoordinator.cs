@@ -170,10 +170,8 @@ public sealed class SentinelCoordinator(
                     return;
                 }
 
-                await RefreshUsbDeviceAccessAsync(token);
-                var refreshedDrives = await WaitForRemovableDrivesAsync(TimeSpan.FromSeconds(30), token);
-                if (refreshedDrives.Count > 0)
-                    drives = refreshedDrives;
+                SetState(UsbState.Enabling, "Scan passed. Finalizing USB access.", 99, drives);
+                drives = await RefreshUsbDeviceAccessAsync(drives, token);
             }
 
             var inaccessible = drives.Where(drive => !inventory.IsAccessibleDriveRoot(drive)).ToArray();
@@ -569,7 +567,9 @@ public sealed class SentinelCoordinator(
         }
     }
 
-    private async Task RefreshUsbDeviceAccessAsync(CancellationToken token)
+    private async Task<IReadOnlyList<string>> RefreshUsbDeviceAccessAsync(
+        IReadOnlyList<string> approvedDrives,
+        CancellationToken token)
     {
         var devices = inventory.GetConnectedUsbStorageDevices()
             .Select(device => device.Id)
@@ -577,7 +577,7 @@ public sealed class SentinelCoordinator(
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         if (devices.Length == 0)
-            return;
+            return approvedDrives;
 
         SuppressDeviceEvents(TimeSpan.FromSeconds(75));
         var pnputil = Path.Combine(Environment.SystemDirectory, "pnputil.exe");
@@ -598,7 +598,19 @@ public sealed class SentinelCoordinator(
                 result: succeeded ? "Restarted" : "Failed");
         }
 
-        await Task.Delay(TimeSpan.FromSeconds(5), token);
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(12);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            token.ThrowIfCancellationRequested();
+            if (approvedDrives.All(inventory.IsAccessibleDriveRoot))
+                return approvedDrives;
+            await Task.Delay(150, token);
+        }
+
+        // A drive letter can rarely change while Windows restarts a USB disk. Use one
+        // complete inventory refresh only after the fast path has timed out.
+        var rediscoveredDrives = GetUsbDrives();
+        return rediscoveredDrives.Count > 0 ? rediscoveredDrives : approvedDrives;
     }
 
     private void SuppressDeviceEvents(TimeSpan duration)
