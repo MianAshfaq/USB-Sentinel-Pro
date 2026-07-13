@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.10.4 - 2026-07-13
+
+- Fixed Disable USB leaving already-mounted USB volumes accessible after the block policy was written.
+- The disable path now refreshes connected physical USB disks so Windows revokes existing Explorer access.
+- Controlled refresh events remain suppressed to prevent a false disconnect/rescan loop.
+
 ## 1.10.3 - 2026-07-13
 
 - Reduced the total large-disk fast Defender gate from 24 to 8 focused launch-file checks, divided across connected partitions.

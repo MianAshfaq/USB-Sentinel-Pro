@@ -229,7 +229,12 @@ public sealed class SentinelCoordinator(
         await _operationLock.WaitAsync(cancellationToken);
         try
         {
+            // A policy registry change alone does not revoke access from volumes that
+            // are already mounted. Refresh the physical USB disks after fail-closed
+            // policy is applied so Explorer loses access to existing volumes too.
+            SuppressDeviceEvents(TimeSpan.FromSeconds(30));
             BlockStorage();
+            await RefreshUsbDeviceAccessAsync(Array.Empty<string>(), cancellationToken);
             SetState(UsbState.Disabled, "USB storage is disabled.", 0, Array.Empty<string>());
             PublishLog(LogLevel.Security, "Disabled", "USB storage was disabled by administrator.");
         }
